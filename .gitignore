@@ -1,0 +1,11 @@
+backend/.env
+dashboard/.env
+mobile/.env
+**/__pycache__/
+*.pyc
+node_modules/
+.expo/
+dist/
+build/
+*.egg-info/
+.DS_Store

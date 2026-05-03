@@ -1,0 +1,27 @@
+{
+  "expo": {
+    "name": "ハル",
+    "slug": "haru-app",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "backgroundColor": "#F8B4D9"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.haru.app"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#F8B4D9"
+      },
+      "package": "com.haru.app"
+    },
+    "plugins": [
+      "expo-secure-store",
+      "expo-notifications"
+    ]
+  }
+}
