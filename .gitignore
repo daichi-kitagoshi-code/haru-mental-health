@@ -9,3 +9,7 @@ dist/
 build/
 *.egg-info/
 .DS_Store
+# Enhanced gitignore
+dashboard/node_modules/
+mobile/node_modules/
+backend/node_modules/
