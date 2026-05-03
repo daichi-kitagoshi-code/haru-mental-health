@@ -5,13 +5,14 @@ from app.models.schemas import SignUpRequest, SignInRequest, UserProfile
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
-supabase = create_client(settings.supabase_url, settings.supabase_key)
+supabase_auth = create_client(settings.supabase_url, settings.supabase_key)
+supabase_admin = create_client(settings.supabase_url, settings.supabase_service_key)
 
 
 @router.post("/signup")
 async def sign_up(request: SignUpRequest):
     try:
-        auth_response = supabase.auth.sign_up({
+        auth_response = supabase_auth.auth.sign_up({
             "email": request.email,
             "password": request.password,
         })
@@ -19,14 +20,14 @@ async def sign_up(request: SignUpRequest):
         if auth_response.user is None:
             raise HTTPException(status_code=400, detail="登録に失敗しました")
 
-        supabase.table("users").insert({
+        supabase_admin.table("users").insert({
             "id": auth_response.user.id,
             "email": request.email,
             "name": request.name,
             "plan": "free",
         }).execute()
 
-        supabase.table("character_settings").insert({
+        supabase_admin.table("character_settings").insert({
             "user_id": auth_response.user.id,
             "char_name": "ハル",
             "speech_style": "casual",
@@ -43,7 +44,7 @@ async def sign_up(request: SignUpRequest):
 @router.post("/signin")
 async def sign_in(request: SignInRequest):
     try:
-        auth_response = supabase.auth.sign_in_with_password({
+        auth_response = supabase_auth.auth.sign_in_with_password({
             "email": request.email,
             "password": request.password,
         })
@@ -61,5 +62,5 @@ async def sign_in(request: SignInRequest):
 
 @router.post("/signout")
 async def sign_out():
-    supabase.auth.sign_out()
+    supabase_auth.auth.sign_out()
     return {"message": "ログアウトしました"}
