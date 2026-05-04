@@ -1,86 +1,122 @@
-import React, { useEffect } from "react";
-import { NavigationContainer } from "@react-navigation/native";
-import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
-import { createNativeStackNavigator } from "@react-navigation/native-stack";
-import { Text, ActivityIndicator, View } from "react-native";
-import { useAuth } from "../hooks/useAuth";
-import { usePushNotifications } from "../hooks/usePushNotifications";
-import ChatScreen from "../screens/ChatScreen";
-import MoodScreen from "../screens/MoodScreen";
-import SettingsScreen from "../screens/SettingsScreen";
-import OnboardingScreen from "../screens/OnboardingScreen";
+import React, { useState, useEffect } from "react";
+import { View, Text, TouchableOpacity, ActivityIndicator } from "react-native";
 import { COLORS } from "../constants/theme";
+import * as SecureStore from "expo-secure-store";
+import { api } from "../services/api";
 
-const Tab = createBottomTabNavigator();
-const Stack = createNativeStackNavigator();
+import OnboardingScreen from "../screens/OnboardingScreen";
+import CharacterGenerateScreen from "../screens/CharacterGenerateScreen";
+import CharacterListScreen from "../screens/CharacterListScreen";
+import ChatScreen from "../screens/ChatScreen";
+import SettingsScreen from "../screens/SettingsScreen";
 
-function MainTabs() {
-  return (
-    <Tab.Navigator
-      screenOptions={{
-        tabBarActiveTintColor: COLORS.primary,
-        tabBarInactiveTintColor: COLORS.textLight,
-        tabBarStyle: { backgroundColor: COLORS.surface },
-        headerStyle: { backgroundColor: COLORS.surface },
-        headerTintColor: COLORS.text,
-      }}
-    >
-      <Tab.Screen
-        name="Chat"
-        component={ChatScreen}
-        options={{
-          title: "ハル",
-          tabBarIcon: ({ color }) => <Text style={{ fontSize: 20, color }}>💬</Text>,
-          headerTitle: "ハル",
-        }}
-      />
-      <Tab.Screen
-        name="Mood"
-        component={MoodScreen}
-        options={{
-          title: "気分",
-          tabBarIcon: ({ color }) => <Text style={{ fontSize: 20, color }}>📊</Text>,
-          headerTitle: "気分記録",
-        }}
-      />
-      <Tab.Screen
-        name="Settings"
-        component={SettingsScreen}
-        options={{
-          title: "設定",
-          tabBarIcon: ({ color }) => <Text style={{ fontSize: 20, color }}>⚙️</Text>,
-          headerTitle: "設定",
-        }}
-      />
-    </Tab.Navigator>
-  );
+type Tab = "friends" | "chat" | "settings";
+
+interface CharacterProfile {
+  id: string; name: string; gender: string; age: number;
+  hometown: string; personality: string; speech_style: string;
 }
 
 export default function AppNavigator() {
-  const { isAuthenticated, isLoading, checkAuth } = useAuth();
-  usePushNotifications(isAuthenticated);
+  const [isAuth, setIsAuth] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [showGenerate, setShowGenerate] = useState(false);
+  const [characters, setCharacters] = useState<CharacterProfile[]>([]);
+  const [selectedCharacter, setSelectedCharacter] = useState<CharacterProfile | null>(null);
+  const [userPlan, setUserPlan] = useState("free");
+  const [tab, setTab] = useState<Tab>("friends");
 
-  useEffect(() => {
-    checkAuth();
-  }, []);
+  useEffect(() => { checkAuth(); }, []);
 
-  if (isLoading) {
-    return (
-      <View style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: COLORS.background }}>
-        <ActivityIndicator size="large" color={COLORS.primary} />
-      </View>
-    );
+  const checkAuth = async () => {
+    const token = await SecureStore.getItemAsync("access_token");
+    if (!token) { setLoading(false); return; }
+    try {
+      const chars = await api.characters.list();
+      setCharacters(chars);
+      setIsAuth(true);
+      if (chars.length > 0) setSelectedCharacter(chars[0]);
+      else setShowGenerate(true);
+    } catch {
+      await SecureStore.deleteItemAsync("access_token");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleLoginSuccess = async () => {
+    try {
+      const chars = await api.characters.list();
+      setCharacters(chars);
+      setIsAuth(true);
+      if (chars.length === 0) setShowGenerate(true);
+      else setSelectedCharacter(chars[0]);
+    } catch {
+      setIsAuth(true);
+      setShowGenerate(true);
+    }
+  };
+
+  const handleCharacterCreated = (character: CharacterProfile) => {
+    setCharacters(prev => [...prev, character]);
+    setSelectedCharacter(character);
+    setShowGenerate(false);
+    setTab("chat");
+  };
+
+  const handleLogout = async () => {
+    await SecureStore.deleteItemAsync("access_token");
+    setIsAuth(false);
+    setCharacters([]);
+    setSelectedCharacter(null);
+    setShowGenerate(false);
+  };
+
+  if (loading) {
+    return <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: COLORS.background }}>
+      <ActivityIndicator size="large" color={COLORS.primary} />
+    </View>;
   }
 
+  if (!isAuth) return <OnboardingScreen onLoginSuccess={handleLoginSuccess} />;
+  if (showGenerate) return <CharacterGenerateScreen onCharacterCreated={handleCharacterCreated} />;
+
+  const TABS = [
+    { id: "friends" as Tab, label: "友達", emoji: "👥" },
+    { id: "chat" as Tab, label: selectedCharacter?.name ?? "チャット", emoji: "💬" },
+    { id: "settings" as Tab, label: "設定", emoji: "⚙️" },
+  ];
+
   return (
-    <NavigationContainer>
-      <Stack.Navigator screenOptions={{ headerShown: false }}>
-        {isAuthenticated ? (
-          <Stack.Screen name="Main" component={MainTabs} />
-        ) : (
-          <Stack.Screen name="Onboarding" component={OnboardingScreen} />
+    <View style={{ flex: 1, backgroundColor: COLORS.background }}>
+      <View style={{ flex: 1 }}>
+        {tab === "friends" && (
+          <CharacterListScreen
+            characters={characters}
+            loading={false}
+            onSelectCharacter={c => { setSelectedCharacter(c); setTab("chat"); }}
+            onCreateNew={() => setShowGenerate(true)}
+            plan={userPlan}
+          />
         )}
-      </Stack.Navigator>
-    </NavigationContainer>
+        {tab === "chat" && selectedCharacter && (
+          <ChatScreen character={selectedCharacter} />
+        )}
+        {tab === "settings" && (
+          <SettingsScreen onLogout={handleLogout} />
+        )}
+      </View>
+
+      <View style={{ flexDirection: "row", borderTopWidth: 1, borderTopColor: COLORS.border, backgroundColor: COLORS.surface, paddingBottom: 24, paddingTop: 8 }}>
+        {TABS.map(t => (
+          <TouchableOpacity key={t.id} style={{ flex: 1, alignItems: "center" }} onPress={() => setTab(t.id)}>
+            <Text style={{ fontSize: 22 }}>{t.emoji}</Text>
+            <Text style={{ fontSize: 11, marginTop: 2, color: tab === t.id ? COLORS.primary : COLORS.textSecondary, fontWeight: tab === t.id ? "700" : "400" }}>
+              {t.label}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+    </View>
   );
 }

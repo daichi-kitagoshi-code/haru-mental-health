@@ -30,7 +30,40 @@ class CharacterProfile(BaseModel):
     hobbies: str
     personality: str
     speech_style: str
+    occupation: Optional[str] = None
+    current_city: Optional[str] = None
+    family_background: Optional[str] = None
+    childhood_story: Optional[str] = None
+    love_history: Optional[str] = None
+    current_romance_status: Optional[str] = None
+    work_hours: Optional[str] = None
+    narrative_profile: Optional[str] = None
     created_at: datetime
+
+
+class CharacterWorry(BaseModel):
+    id: str
+    character_id: str
+    title: str
+    worry_type: str
+    current_status: str
+    started_at: datetime
+
+
+class CharacterPost(BaseModel):
+    id: str
+    character_id: str
+    content: str
+    post_type: str
+    scheduled_at: datetime
+    is_published: bool
+    related_worry_id: Optional[str] = None
+    created_at: datetime
+
+
+class PostFeedItem(BaseModel):
+    post: CharacterPost
+    character: CharacterProfile
 
 
 class SignUpRequest(BaseModel):

@@ -11,14 +11,9 @@ async function request(path: string, options: RequestInit = {}) {
     "Content-Type": "application/json",
     ...(options.headers as Record<string, string>),
   };
-  if (token) {
-    headers["Authorization"] = `Bearer ${token}`;
-  }
+  if (token) headers["Authorization"] = `Bearer ${token}`;
 
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    ...options,
-    headers,
-  });
+  const response = await fetch(`${API_BASE_URL}${path}`, { ...options, headers });
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({ detail: "エラーが発生しました" }));
@@ -31,46 +26,39 @@ async function request(path: string, options: RequestInit = {}) {
 export const api = {
   auth: {
     signUp: (email: string, password: string, name: string) =>
-      request("/auth/signup", {
-        method: "POST",
-        body: JSON.stringify({ email, password, name }),
-      }),
+      request("/auth/signup", { method: "POST", body: JSON.stringify({ email, password, name }) }),
     signIn: (email: string, password: string) =>
-      request("/auth/signin", {
-        method: "POST",
-        body: JSON.stringify({ email, password }),
-      }),
+      request("/auth/signin", { method: "POST", body: JSON.stringify({ email, password }) }),
     signOut: () => request("/auth/signout", { method: "POST" }),
   },
 
   chat: {
-    sendMessage: (content: string, mode: string = "chat") =>
+    sendMessage: (content: string, characterId: string) =>
       request("/chat/message", {
         method: "POST",
-        body: JSON.stringify({ content, mode }),
+        body: JSON.stringify({ content, character_id: characterId }),
       }),
-    extractMemories: () =>
-      request("/chat/extract-memories", { method: "POST" }),
   },
 
-  mood: {
-    log: (score: number, note?: string) =>
-      request("/mood/log", {
+  characters: {
+    list: () => request("/characters/"),
+    generatePreview: (gender: string, ageGroup: string) =>
+      request("/characters/generate-preview", {
         method: "POST",
-        body: JSON.stringify({ score, note }),
+        body: JSON.stringify({ gender, age_group: ageGroup }),
       }),
-    getHistory: (days: number = 30) =>
-      request(`/mood/history?days=${days}`),
-    getSummary: () => request("/mood/summary"),
-  },
-
-  character: {
-    getSettings: () => request("/character/settings"),
-    updateSettings: (charName: string, speechStyle: string) =>
-      request("/character/settings", {
-        method: "PUT",
-        body: JSON.stringify({ char_name: charName, speech_style: speechStyle }),
+    confirm: (character: any) =>
+      request(`/characters/confirm/${character.gender}/${character.age}`, {
+        method: "POST",
+        body: JSON.stringify(character),
       }),
+    generate: (gender: string, ageGroup: string) =>
+      request("/characters/generate", {
+        method: "POST",
+        body: JSON.stringify({ gender, age_group: ageGroup }),
+      }),
+    delete: (characterId: string) =>
+      request(`/characters/${characterId}`, { method: "DELETE" }),
   },
 
   notifications: {

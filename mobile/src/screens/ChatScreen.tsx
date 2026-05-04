@@ -1,15 +1,7 @@
-import React, { useState, useRef, useCallback } from "react";
+import React, { useState, useRef, useCallback, useEffect } from "react";
 import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  FlatList,
-  StyleSheet,
-  KeyboardAvoidingView,
-  Platform,
-  ActivityIndicator,
-  Linking,
+  View, Text, TextInput, TouchableOpacity, FlatList,
+  StyleSheet, KeyboardAvoidingView, Platform, ActivityIndicator, Linking,
 } from "react-native";
 import { COLORS, SPACING } from "../constants/theme";
 import { api } from "../services/api";
@@ -22,21 +14,36 @@ type Message = {
   crisisResources?: string[];
 };
 
-type Mode = "chat" | "vent" | "consult" | "encourage";
+interface CharacterProfile {
+  id: string;
+  name: string;
+  gender: string;
+  age: number;
+  hometown: string;
+  personality: string;
+  speech_style: string;
+}
 
-const MODE_LABELS: Record<Mode, string> = {
-  chat: "雑談",
-  vent: "愚痴",
-  consult: "相談",
-  encourage: "励まし",
-};
+interface Props {
+  character: CharacterProfile;
+}
 
-export default function ChatScreen() {
+export default function ChatScreen({ character }: Props) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [mode, setMode] = useState<Mode>("chat");
   const flatListRef = useRef<FlatList>(null);
+
+  useEffect(() => {
+    // Opening greeting when chat starts
+    if (messages.length === 0) {
+      setMessages([{
+        id: "greeting",
+        role: "assistant",
+        content: `やあ！${character.name}だよ。何でも話してね 😊`,
+      }]);
+    }
+  }, []);
 
   const sendMessage = useCallback(async () => {
     if (!inputText.trim() || isLoading) return;
@@ -47,54 +54,42 @@ export default function ChatScreen() {
       content: inputText.trim(),
     };
 
-    setMessages((prev) => [...prev, userMessage]);
+    setMessages(prev => [...prev, userMessage]);
     setInputText("");
     setIsLoading(true);
 
     try {
-      const response = await api.chat.sendMessage(userMessage.content, mode);
-      const assistantMessage: Message = {
+      const response = await api.chat.sendMessage(userMessage.content, character.id);
+      setMessages(prev => [...prev, {
         id: (Date.now() + 1).toString(),
         role: "assistant",
         content: response.reply,
         crisisLevel: response.crisis_level,
         crisisResources: response.crisis_resources,
-      };
-      setMessages((prev) => [...prev, assistantMessage]);
+      }]);
     } catch (error: any) {
-      const errorMessage: Message = {
+      setMessages(prev => [...prev, {
         id: (Date.now() + 1).toString(),
         role: "assistant",
         content: error.message || "ごめん、ちょっとうまく返事できなかった…もう一回言ってくれる？",
-      };
-      setMessages((prev) => [...prev, errorMessage]);
+      }]);
     } finally {
       setIsLoading(false);
+      setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
     }
-  }, [inputText, isLoading, mode]);
+  }, [inputText, isLoading, character.id]);
 
   const renderMessage = ({ item }: { item: Message }) => (
-    <View
-      style={[
-        styles.messageBubble,
-        item.role === "user" ? styles.userBubble : styles.assistantBubble,
-      ]}
-    >
-      <Text style={[styles.messageText, item.role === "user" && styles.userText]}>
+    <View style={[styles.messageBubble, item.role === "user" ? styles.userBubble : styles.assistantBubble]}>
+      <Text style={[styles.messageText, item.role === "user" ? styles.userText : styles.assistantText]}>
         {item.content}
       </Text>
-      {item.crisisResources && (
+      {item.crisisResources && item.crisisResources.length > 0 && (
         <View style={styles.crisisBox}>
-          <Text style={styles.crisisTitle}>相談できる場所があるよ：</Text>
+          <Text style={styles.crisisTitle}>🆘 もし辛くなったら</Text>
           {item.crisisResources.map((resource, i) => (
-            <TouchableOpacity
-              key={i}
-              onPress={() => {
-                const phone = resource.match(/[\d-]+/);
-                if (phone) Linking.openURL(`tel:${phone[0].replace(/-/g, "")}`);
-              }}
-            >
-              <Text style={styles.crisisLink}>{resource}</Text>
+            <TouchableOpacity key={i} onPress={() => Linking.openURL(`tel:${resource.split(/[（(]/)[0].trim()}`)}>
+              <Text style={styles.crisisResource}>{resource}</Text>
             </TouchableOpacity>
           ))}
         </View>
@@ -105,36 +100,27 @@ export default function ChatScreen() {
   return (
     <KeyboardAvoidingView
       style={styles.container}
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
       keyboardVerticalOffset={90}
     >
-      <View style={styles.modeBar}>
-        {(Object.keys(MODE_LABELS) as Mode[]).map((m) => (
-          <TouchableOpacity
-            key={m}
-            style={[styles.modeButton, mode === m && styles.modeButtonActive]}
-            onPress={() => setMode(m)}
-          >
-            <Text style={[styles.modeText, mode === m && styles.modeTextActive]}>
-              {MODE_LABELS[m]}
-            </Text>
-          </TouchableOpacity>
-        ))}
+      <View style={styles.header}>
+        <Text style={styles.headerName}>{character.name}</Text>
+        <Text style={styles.headerDetail}>{character.age}歳・{character.hometown}</Text>
       </View>
 
       <FlatList
         ref={flatListRef}
         data={messages}
+        keyExtractor={item => item.id}
         renderItem={renderMessage}
-        keyExtractor={(item) => item.id}
         contentContainerStyle={styles.messageList}
-        onContentSizeChange={() => flatListRef.current?.scrollToEnd()}
+        onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: false })}
       />
 
       {isLoading && (
         <View style={styles.typingIndicator}>
           <ActivityIndicator size="small" color={COLORS.primary} />
-          <Text style={styles.typingText}>ハルが入力中...</Text>
+          <Text style={styles.typingText}>{character.name}が入力中…</Text>
         </View>
       )}
 
@@ -150,11 +136,11 @@ export default function ChatScreen() {
           onSubmitEditing={sendMessage}
         />
         <TouchableOpacity
-          style={[styles.sendButton, !inputText.trim() && styles.sendButtonDisabled]}
+          style={[styles.sendButton, (!inputText.trim() || isLoading) && styles.sendDisabled]}
           onPress={sendMessage}
           disabled={!inputText.trim() || isLoading}
         >
-          <Text style={styles.sendButtonText}>送信</Text>
+          <Text style={styles.sendText}>送信</Text>
         </TouchableOpacity>
       </View>
     </KeyboardAvoidingView>
@@ -162,133 +148,43 @@ export default function ChatScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: COLORS.background,
+  container: { flex: 1, backgroundColor: COLORS.background },
+  header: {
+    backgroundColor: COLORS.surface, paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.md, alignItems: "center",
+    borderBottomWidth: 1, borderBottomColor: COLORS.border,
   },
-  modeBar: {
-    flexDirection: "row",
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
-    backgroundColor: COLORS.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
-  },
-  modeButton: {
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.xs,
-    borderRadius: 16,
-    marginRight: SPACING.sm,
-    backgroundColor: COLORS.border,
-  },
-  modeButtonActive: {
-    backgroundColor: COLORS.primary,
-  },
-  modeText: {
-    fontSize: 13,
-    color: COLORS.textSecondary,
-  },
-  modeTextActive: {
-    color: "#FFFFFF",
-    fontWeight: "600",
-  },
-  messageList: {
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
-  },
-  messageBubble: {
-    maxWidth: "80%",
-    padding: SPACING.md,
-    borderRadius: 18,
-    marginVertical: SPACING.xs,
-  },
-  userBubble: {
-    alignSelf: "flex-end",
-    backgroundColor: COLORS.primary,
-    borderBottomRightRadius: 4,
-  },
-  assistantBubble: {
-    alignSelf: "flex-start",
-    backgroundColor: COLORS.surface,
-    borderBottomLeftRadius: 4,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
-  },
-  messageText: {
-    fontSize: 16,
-    lineHeight: 22,
-    color: COLORS.text,
-  },
-  userText: {
-    color: "#FFFFFF",
-  },
-  crisisBox: {
-    marginTop: SPACING.sm,
-    padding: SPACING.sm,
-    backgroundColor: "#FEF2F2",
-    borderRadius: 8,
-    borderLeftWidth: 3,
-    borderLeftColor: COLORS.error,
-  },
-  crisisTitle: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: COLORS.error,
-    marginBottom: SPACING.xs,
-  },
-  crisisLink: {
-    fontSize: 14,
-    color: "#1D4ED8",
-    textDecorationLine: "underline",
-    marginVertical: 2,
-  },
+  headerName: { fontSize: 17, fontWeight: "700", color: COLORS.text },
+  headerDetail: { fontSize: 12, color: COLORS.textSecondary, marginTop: 2 },
+  messageList: { padding: SPACING.md, paddingBottom: SPACING.lg },
+  messageBubble: { maxWidth: "80%", marginVertical: 4, padding: SPACING.md, borderRadius: 16 },
+  userBubble: { alignSelf: "flex-end", backgroundColor: COLORS.primary, borderBottomRightRadius: 4 },
+  assistantBubble: { alignSelf: "flex-start", backgroundColor: COLORS.surface, borderBottomLeftRadius: 4 },
+  messageText: { fontSize: 15, lineHeight: 22 },
+  userText: { color: "#FFF" },
+  assistantText: { color: COLORS.text },
+  crisisBox: { marginTop: SPACING.sm, padding: SPACING.sm, backgroundColor: "#FFF3CD", borderRadius: 8 },
+  crisisTitle: { fontSize: 13, fontWeight: "600", color: "#856404", marginBottom: 4 },
+  crisisResource: { fontSize: 13, color: "#0066CC", textDecorationLine: "underline", marginTop: 2 },
   typingIndicator: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.xs,
+    flexDirection: "row", alignItems: "center", paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.xs, gap: SPACING.xs,
   },
-  typingText: {
-    marginLeft: SPACING.sm,
-    fontSize: 13,
-    color: COLORS.textLight,
-  },
+  typingText: { fontSize: 13, color: COLORS.textSecondary },
   inputContainer: {
-    flexDirection: "row",
-    alignItems: "flex-end",
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
-    backgroundColor: COLORS.surface,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.border,
+    flexDirection: "row", padding: SPACING.sm, borderTopWidth: 1,
+    borderTopColor: COLORS.border, backgroundColor: COLORS.surface,
+    alignItems: "flex-end", gap: SPACING.xs,
   },
   input: {
-    flex: 1,
-    minHeight: 40,
-    maxHeight: 120,
-    backgroundColor: COLORS.background,
-    borderRadius: 20,
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
-    fontSize: 16,
-    color: COLORS.text,
+    flex: 1, minHeight: 40, maxHeight: 120, backgroundColor: COLORS.background,
+    borderRadius: 20, paddingHorizontal: SPACING.md, paddingVertical: SPACING.sm,
+    fontSize: 15, color: COLORS.text,
   },
   sendButton: {
-    marginLeft: SPACING.sm,
-    backgroundColor: COLORS.primary,
-    borderRadius: 20,
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
+    backgroundColor: COLORS.primary, borderRadius: 20, paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm, justifyContent: "center",
   },
-  sendButtonDisabled: {
-    opacity: 0.5,
-  },
-  sendButtonText: {
-    color: "#FFFFFF",
-    fontWeight: "600",
-    fontSize: 15,
-  },
+  sendDisabled: { backgroundColor: COLORS.primary + "60" },
+  sendText: { color: "#FFF", fontWeight: "600", fontSize: 15 },
 });

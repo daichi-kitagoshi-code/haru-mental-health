@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.routers import auth, chat, character, b2b, notifications
+from app.routers import auth, chat, character, b2b, notifications, posts
 
 app = FastAPI(
     title="ハル API",
@@ -21,6 +21,7 @@ app.include_router(chat.router)
 app.include_router(character.router)
 app.include_router(b2b.router)
 app.include_router(notifications.router)
+app.include_router(posts.router)
 
 
 @app.get("/health")
