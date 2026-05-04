@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.routers import auth, chat, mood, character, b2b, notifications
+from app.routers import auth, chat, character, b2b, notifications
 
 app = FastAPI(
     title="ハル API",
@@ -18,7 +18,6 @@ app.add_middleware(
 
 app.include_router(auth.router)
 app.include_router(chat.router)
-app.include_router(mood.router)
 app.include_router(character.router)
 app.include_router(b2b.router)
 app.include_router(notifications.router)

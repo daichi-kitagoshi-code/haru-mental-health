@@ -7,7 +7,7 @@ from app.services.memory_service import extract_memories
 from app.services.risk_analyzer import analyze_risk_from_conversation
 from datetime import datetime, timezone
 
-MEMORY_EXTRACTION_INTERVAL = 10  # N回メッセージごとに記憶を抽出
+MEMORY_EXTRACTION_INTERVAL = 10
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 
@@ -23,13 +23,13 @@ async def get_current_user_id(authorization: str = Header(...)) -> str:
         raise HTTPException(status_code=401, detail="認証が必要です")
 
 
-async def _background_post_processing(user_id: str, conversation_text: str, message_count: int):
-    """メッセージ送信後のバックグラウンド処理（記憶抽出・リスク分析）"""
+async def _background_post_processing(user_id: str, character_id: str, conversation_text: str, message_count: int):
     if message_count % MEMORY_EXTRACTION_INTERVAL == 0:
         new_memories = await extract_memories(conversation_text)
         for memory in new_memories:
             supabase.table("user_memories").insert({
                 "user_id": user_id,
+                "character_id": character_id,
                 "content": memory["content"],
                 "category": memory.get("category", "general"),
                 "importance": memory.get("importance", 5),
@@ -73,8 +73,9 @@ async def _background_post_processing(user_id: str, conversation_text: str, mess
 async def send_message(request: MessageRequest, background_tasks: BackgroundTasks, authorization: str = Header(...)):
     user_id = await get_current_user_id(authorization)
 
-    user_data = supabase.table("users").select("plan").eq("id", user_id).single().execute()
+    user_data = supabase.table("users").select("plan, name").eq("id", user_id).single().execute()
     plan = user_data.data["plan"]
+    user_name = user_data.data.get("name", "あなた")
 
     if plan == "free":
         today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
@@ -90,16 +91,16 @@ async def send_message(request: MessageRequest, background_tasks: BackgroundTask
                 detail="無料プランの1日の会話回数上限に達しました。スタンダードプランにアップグレードすると無制限で会話できます。"
             )
 
-    char_settings = supabase.table("character_settings") \
-        .select("char_name, speech_style") \
-        .eq("user_id", user_id) \
-        .single().execute()
-    char_name = char_settings.data["char_name"]
-    speech_style = char_settings.data["speech_style"]
+    character_result = supabase.table("characters") \
+        .select("*").eq("id", request.character_id).eq("user_id", user_id).single().execute()
+    if not character_result.data:
+        raise HTTPException(status_code=404, detail="キャラクターが見つかりません")
+    character = character_result.data
 
     memories = supabase.table("user_memories") \
         .select("content, category, importance") \
         .eq("user_id", user_id) \
+        .eq("character_id", request.character_id) \
         .order("importance", desc=True) \
         .limit(settings.max_memory_items) \
         .execute()
@@ -107,6 +108,7 @@ async def send_message(request: MessageRequest, background_tasks: BackgroundTask
     history = supabase.table("conversations") \
         .select("role, content") \
         .eq("user_id", user_id) \
+        .eq("character_id", request.character_id) \
         .order("created_at", desc=True) \
         .limit(20) \
         .execute()
@@ -115,75 +117,42 @@ async def send_message(request: MessageRequest, background_tasks: BackgroundTask
     result = await generate_reply(
         user_message=request.content,
         conversation_history=conversation_history,
-        char_name=char_name,
-        speech_style=speech_style,
-        mode=request.mode,
+        character=character,
+        user_name=user_name,
         user_memories=memories.data if memories.data else [],
     )
 
     supabase.table("conversations").insert({
         "user_id": user_id,
+        "character_id": request.character_id,
         "role": "user",
         "content": request.content,
-        "mode": request.mode,
     }).execute()
 
     supabase.table("conversations").insert({
         "user_id": user_id,
+        "character_id": request.character_id,
         "role": "assistant",
         "content": result["reply"],
-        "mode": request.mode,
     }).execute()
 
-    # バックグラウンドで記憶抽出とリスク分析を実行
     all_msgs = supabase.table("conversations") \
         .select("role, content") \
         .eq("user_id", user_id) \
+        .eq("character_id", request.character_id) \
         .order("created_at", desc=True) \
         .limit(30).execute()
     msg_count = supabase.table("conversations") \
         .select("id", count="exact") \
         .eq("user_id", user_id).eq("role", "user").execute().count or 0
     conversation_text = "\n".join(
-        f"{'ユーザー' if m['role'] == 'user' else 'ハル'}: {m['content']}"
+        f"{'ユーザー' if m['role'] == 'user' else character['name']}: {m['content']}"
         for m in reversed(all_msgs.data or [])
     )
-    background_tasks.add_task(_background_post_processing, user_id, conversation_text, msg_count)
+    background_tasks.add_task(_background_post_processing, user_id, request.character_id, conversation_text, msg_count)
 
     return MessageResponse(
         reply=result["reply"],
         crisis_level=result["crisis_level"],
         crisis_resources=result["crisis_resources"],
     )
-
-
-@router.post("/extract-memories")
-async def trigger_memory_extraction(authorization: str = Header(...)):
-    user_id = await get_current_user_id(authorization)
-
-    recent_conversations = supabase.table("conversations") \
-        .select("role, content") \
-        .eq("user_id", user_id) \
-        .order("created_at", desc=True) \
-        .limit(30) \
-        .execute()
-
-    if not recent_conversations.data:
-        return {"extracted": 0}
-
-    conversation_text = "\n".join(
-        f"{'ユーザー' if msg['role'] == 'user' else 'ハル'}: {msg['content']}"
-        for msg in reversed(recent_conversations.data)
-    )
-
-    new_memories = await extract_memories(conversation_text)
-
-    for memory in new_memories:
-        supabase.table("user_memories").insert({
-            "user_id": user_id,
-            "content": memory["content"],
-            "category": memory.get("category", "general"),
-            "importance": memory.get("importance", 5),
-        }).execute()
-
-    return {"extracted": len(new_memories)}

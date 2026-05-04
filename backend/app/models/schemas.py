@@ -1,10 +1,11 @@
 from datetime import datetime
 from pydantic import BaseModel, Field
+from typing import Optional
 
 
 class MessageRequest(BaseModel):
     content: str = Field(..., min_length=1, max_length=2000)
-    mode: str = Field(default="chat", pattern="^(chat|vent|consult|encourage)$")
+    character_id: str
 
 
 class MessageResponse(BaseModel):
@@ -13,33 +14,22 @@ class MessageResponse(BaseModel):
     crisis_resources: list[str] | None = None
 
 
-class MoodLogRequest(BaseModel):
-    score: int = Field(..., ge=1, le=5)
-    note: str | None = None
+class CharacterGenerateRequest(BaseModel):
+    gender: str = Field(..., pattern="^(male|female|other)$")
+    age_group: str = Field(..., pattern="^(same|older|younger)$")
 
 
-class MoodLogResponse(BaseModel):
+class CharacterProfile(BaseModel):
     id: str
-    score: int
-    note: str | None
-    created_at: datetime
-
-
-class CharacterSettingsRequest(BaseModel):
-    char_name: str = Field(default="ハル", max_length=20)
-    speech_style: str = Field(default="casual", pattern="^(casual|polite|kansai|cool)$")
-
-
-class CharacterSettingsResponse(BaseModel):
-    char_name: str
-    speech_style: str
-
-
-class UserProfile(BaseModel):
-    id: str
-    email: str
     name: str
-    plan: str
+    gender: str
+    age: int
+    hometown: str
+    education: str
+    background: str
+    hobbies: str
+    personality: str
+    speech_style: str
     created_at: datetime
 
 
@@ -52,3 +42,10 @@ class SignUpRequest(BaseModel):
 class SignInRequest(BaseModel):
     email: str
     password: str
+
+
+class UserProfile(BaseModel):
+    id: str
+    email: str
+    name: str
+    plan: str
