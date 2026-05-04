@@ -2,7 +2,7 @@ import React, { useState, useRef, useCallback, useEffect } from "react";
 import {
   View, Text, TextInput, TouchableOpacity, FlatList,
   StyleSheet, KeyboardAvoidingView, Platform, ActivityIndicator,
-  Linking, Animated,
+  Linking, Animated, Image,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
@@ -18,7 +18,7 @@ type Message = {
 export interface CharacterProfile {
   id: string; name: string; gender: string; age: number;
   hometown: string; personality: string; speech_style: string;
-  occupation?: string; current_city?: string;
+  occupation?: string; current_city?: string; avatar_url?: string;
 }
 
 interface Props {
@@ -112,9 +112,13 @@ export default function ChatScreen({ character, onBack }: Props) {
         {shouldShowTs(prev, item) && <Text style={s.ts}>{fmtTime(item.ts)}</Text>}
         <View style={[s.row, isUser ? s.rowRight : s.rowLeft]}>
           {!isUser && (
-            <View style={s.avatar}>
-              <Text style={s.avatarText}>{character.name[0]}</Text>
-            </View>
+            character.avatar_url ? (
+              <Image source={{ uri: character.avatar_url }} style={s.avatarImg} />
+            ) : (
+              <View style={s.avatar}>
+                <Text style={s.avatarText}>{character.name[0]}</Text>
+              </View>
+            )
           )}
           <View style={[s.bubble, isUser ? s.userBubble : s.aiBubble]}>
             <Text style={[s.bubbleText, isUser ? s.userText : s.aiText]}>{item.content}</Text>
@@ -145,9 +149,13 @@ export default function ChatScreen({ character, onBack }: Props) {
           </TouchableOpacity>
         )}
         <View style={s.headerCenter}>
-          <View style={s.headerAvatar}>
-            <Text style={s.headerAvatarText}>{character.name[0]}</Text>
-          </View>
+          {character.avatar_url ? (
+            <Image source={{ uri: character.avatar_url }} style={s.headerAvatarImg} />
+          ) : (
+            <View style={s.headerAvatar}>
+              <Text style={s.headerAvatarText}>{character.name[0]}</Text>
+            </View>
+          )}
           <View>
             <Text style={s.headerName}>{character.name}</Text>
             <Text style={s.headerSub}>{character.age}歳 · {location}</Text>
@@ -205,6 +213,7 @@ const s = StyleSheet.create({
   },
   backBtn: { marginRight: SPACING.sm },
   headerCenter: { flexDirection: "row", alignItems: "center", gap: 10, flex: 1 },
+  headerAvatarImg: { width: 36, height: 36, borderRadius: 18 },
   headerAvatar: {
     width: 36, height: 36, borderRadius: 18,
     backgroundColor: COLORS.accent1 + "22", justifyContent: "center", alignItems: "center",
@@ -217,6 +226,7 @@ const s = StyleSheet.create({
   row: { flexDirection: "row", marginVertical: 2, alignItems: "flex-end" },
   rowLeft: { justifyContent: "flex-start" },
   rowRight: { justifyContent: "flex-end" },
+  avatarImg: { width: 28, height: 28, borderRadius: 14, marginRight: 6, marginBottom: 2 },
   avatar: {
     width: 28, height: 28, borderRadius: 14,
     backgroundColor: COLORS.accent1 + "22", justifyContent: "center", alignItems: "center",

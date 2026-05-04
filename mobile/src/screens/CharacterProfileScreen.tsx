@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import {
   View, Text, TouchableOpacity, StyleSheet, ScrollView,
-  ActivityIndicator, FlatList,
+  ActivityIndicator, Image,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
@@ -16,7 +16,7 @@ export interface CharacterProfile {
   occupation?: string; current_city?: string;
   family_background?: string; childhood_story?: string;
   love_history?: string; current_romance_status?: string;
-  work_hours?: string; narrative_profile?: string;
+  work_hours?: string; narrative_profile?: string; avatar_url?: string;
 }
 
 interface Post {
@@ -81,9 +81,13 @@ export default function CharacterProfileScreen({ character, onBack, onChat }: Pr
           <ChevronLeft size={22} color={COLORS.text} strokeWidth={1.5} />
         </TouchableOpacity>
         <View style={s.heroContent}>
-          <View style={s.heroAvatar}>
-            <Text style={s.heroAvatarText}>{character.name[0]}</Text>
-          </View>
+          {character.avatar_url ? (
+            <Image source={{ uri: character.avatar_url }} style={s.heroAvatarImg} />
+          ) : (
+            <View style={s.heroAvatar}>
+              <Text style={s.heroAvatarText}>{character.name[0]}</Text>
+            </View>
+          )}
           <Text style={s.heroName}>{character.name}</Text>
           <Text style={s.heroMeta}>
             {character.age}歳{character.occupation ? ` · ${character.occupation}` : ""} · {location}
@@ -197,12 +201,16 @@ const s = StyleSheet.create({
   gradientHeader: { paddingTop: 8, paddingBottom: 28, paddingHorizontal: SPACING.md },
   backBtn: { marginBottom: SPACING.md },
   heroContent: { alignItems: "center" },
+  heroAvatarImg: {
+    width: 90, height: 90, borderRadius: 45,
+    marginBottom: 12, borderWidth: 3, borderColor: "rgba(255,255,255,0.8)",
+  },
   heroAvatar: {
-    width: 80, height: 80, borderRadius: 40,
+    width: 90, height: 90, borderRadius: 45,
     backgroundColor: "rgba(255,107,107,0.2)", justifyContent: "center", alignItems: "center",
     marginBottom: 12, borderWidth: 3, borderColor: "rgba(255,255,255,0.6)",
   },
-  heroAvatarText: { fontSize: 32, fontWeight: "700", color: COLORS.accent1 },
+  heroAvatarText: { fontSize: 36, fontWeight: "700", color: COLORS.accent1 },
   heroName: { fontSize: 24, fontWeight: "700", color: COLORS.text, marginBottom: 4 },
   heroMeta: { fontSize: 14, color: COLORS.textSecondary },
   tabBar: {

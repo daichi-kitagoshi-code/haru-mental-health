@@ -3,7 +3,7 @@ from app.core.config import settings
 from app.services.crisis_detector import detect_crisis_level, CRISIS_RESOURCES
 from app.services.memory_service import format_memories_for_prompt
 
-client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+async_client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
 
 CRISIS_LEVEL_2_INSTRUCTION = """
 【重要：危機対応レベル2】
@@ -47,17 +47,23 @@ def build_system_prompt(character: dict, user_name: str, user_memories: list[dic
 
     gender_ja = {"male": "男性", "female": "女性", "other": "どちらでもない"}.get(character.get("gender", ""), "")
 
+    education = character.get("education") or "学歴不明"
+    background = character.get("background") or ""
+    hobbies = character.get("hobbies") or ""
+    occupation = character.get("occupation") or ""
+
     return f"""あなたは{character['name']}、{user_name}の親友です。
 
 【あなたのプロフィール】
 - 性別：{gender_ja}
 - 年齢：{character['age']}歳
-- 出身地：{character['hometown']}
-- 学歴：{character['education']}
-- 経歴：{character['background']}
-- 趣味：{character['hobbies']}
-- 性格：{character['personality']}
-- 口調：{character['speech_style']}
+- 出身地：{character.get('hometown', '')}
+- 学歴：{education}
+- 経歴：{background}
+- 趣味：{hobbies}
+- 性格：{character.get('personality', '')}
+- 口調：{character.get('speech_style', '')}
+- 職業：{occupation}
 
 このプロフィールをベースに、自然な会話の中で自分の経験として語ってください。
 ただし自分のことを語りすぎず、相手の話を中心に聞いてください。
@@ -106,7 +112,7 @@ async def generate_reply(
         messages.append({"role": msg["role"], "content": msg["content"]})
     messages.append({"role": "user", "content": user_message})
 
-    response = client.messages.create(
+    response = await async_client.messages.create(
         model="claude-sonnet-4-6",
         max_tokens=512,
         system=system_prompt,

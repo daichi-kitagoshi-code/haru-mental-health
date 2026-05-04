@@ -25,9 +25,9 @@ class CharacterProfile(BaseModel):
     gender: str
     age: int
     hometown: str
-    education: str
-    background: str
-    hobbies: str
+    education: Optional[str] = None
+    background: Optional[str] = None
+    hobbies: Optional[str] = None
     personality: str
     speech_style: str
     occupation: Optional[str] = None
@@ -38,6 +38,7 @@ class CharacterProfile(BaseModel):
     current_romance_status: Optional[str] = None
     work_hours: Optional[str] = None
     narrative_profile: Optional[str] = None
+    avatar_url: Optional[str] = None
     created_at: datetime
 
 

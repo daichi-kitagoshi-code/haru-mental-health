@@ -1,4 +1,7 @@
 import random
+import hashlib
+import urllib.parse
+import anthropic
 from fastapi import APIRouter, Header, HTTPException
 from supabase import create_client
 from app.core.config import settings
@@ -6,8 +9,9 @@ from app.models.schemas import CharacterGenerateRequest, CharacterProfile
 
 router = APIRouter(prefix="/characters", tags=["characters"])
 supabase = create_client(settings.supabase_url, settings.supabase_service_key)
+async_client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
 
-PLAN_LIMITS = {"free": 1, "standard": 3, "premium": 5}
+PLAN_LIMITS = {"free": 2, "standard": 3, "premium": 5}
 
 NAMES_MALE = ["蓮", "陽太", "悠斗", "湊", "大翔", "颯", "翔", "樹", "柊", "隼人", "奏", "律"]
 NAMES_FEMALE = ["陽菜", "咲", "結菜", "莉子", "さくら", "美月", "七海", "凛", "澪", "ひなた", "琴音", "朱里"]
@@ -141,38 +145,55 @@ def get_age_range(age_group: str, user_age: int = 25) -> tuple[int, int]:
         return (user_age - 10, user_age - 3)
 
 
-def build_narrative(char: dict) -> str:
-    name = char["name"]
+def generate_avatar_url(char: dict) -> str:
+    gender_en = "woman" if char["gender"] == "female" else "man" if char["gender"] == "male" else "person"
     age = char["age"]
-    hometown = char["hometown"]
-    current_city = char.get("current_city", hometown)
     occupation = char.get("occupation", "")
-    family = char.get("family_background", "")
-    childhood = char.get("childhood_story", "")
-    education = char.get("education", "")
-    background = char.get("background", "")
-    love = char.get("love_history", "")
-    romance = char.get("current_romance_status", "")
+    seed = int(hashlib.md5(char["name"].encode()).hexdigest()[:8], 16) % 100000
+    prompt = (
+        f"portrait photo, japanese {gender_en}, {age} years old, {occupation}, "
+        "friendly natural smile, soft natural lighting, photorealistic, high quality, "
+        "face closeup, warm background, casual style"
+    )
+    encoded = urllib.parse.quote(prompt)
+    return f"https://image.pollinations.ai/prompt/{encoded}?width=512&height=512&nologo=true&seed={seed}&model=flux-realism"
+
+
+async def generate_narrative_with_claude(char: dict) -> str:
     worries = char.get("current_worries_list", [])
-
-    location_line = f"今は{current_city}に住んでる。" if current_city not in hometown else ""
-
     worry_text = ""
     if worries:
-        w = worries[:2]
-        worry_text = f"\n\n最近の悩みは{w[0]['title']}こと。"
-        if len(w) > 1:
-            worry_text += f"それと、{w[1]['title']}のも頭にある。"
+        titles = [w["title"] for w in worries[:2]]
+        worry_text = f"最近の悩みは「{titles[0]}」こと。" + (f"「{titles[1]}」も気になってる。" if len(titles) > 1 else "")
 
-    return f"""{hometown}生まれ、{age}歳。{location_line}
+    prompt = f"""以下のプロフィールを持つ人物の自己紹介文を生成してください。
 
-{family}
-{childhood}
+名前: {char['name']} / 年齢: {char['age']}歳 / 出身: {char['hometown']} / 現在地: {char.get('current_city', '')}
+職業: {char.get('occupation', '')} / 学歴: {char.get('education', '')}
+家族背景: {char.get('family_background', '')}
+幼少期: {char.get('childhood_story', '')}
+経歴: {char.get('background', '')}
+趣味: {char.get('hobbies', '')} / 性格: {char.get('personality', '')}
+恋愛遍歴: {char.get('love_history', '')}
+現在の恋愛状況: {char.get('current_romance_status', '')}
+{worry_text}
 
-{education}。{background}。
-今は{occupation}をしてる。
+条件:
+- 700〜850文字で書く
+- 一人称は「私」か「俺」（性別に合わせて）
+- 友達に話すような温かくてリアルな口調
+- 情報を羅列せず、自然なエピソードとして流れるように書く
+- 改行を適度に入れて読みやすくする
+- 最後は今の自分の気持ちや悩みで締める
 
-恋愛は…{love}今は{romance}。{worry_text}""".strip()
+自己紹介文のみを出力してください（説明や前置き不要）。"""
+
+    response = await async_client.messages.create(
+        model="claude-haiku-4-5-20251001",
+        max_tokens=1200,
+        messages=[{"role": "user", "content": prompt}],
+    )
+    return response.content[0].text.strip()
 
 
 async def get_current_user_id(authorization: str = Header(...)) -> str:
@@ -227,7 +248,6 @@ def _build_character_data(request: CharacterGenerateRequest, user_id: str | None
         "current_worries_list": worries_list,
     }
 
-    char["narrative_profile"] = build_narrative(char)
     if user_id:
         char["user_id"] = user_id
 
@@ -239,6 +259,8 @@ async def generate_character_preview(request: CharacterGenerateRequest, authoriz
     await get_current_user_id(authorization)
     from datetime import datetime, timezone
     char = _build_character_data(request)
+    char["narrative_profile"] = await generate_narrative_with_claude(char)
+    char["avatar_url"] = generate_avatar_url(char)
     char.pop("current_worries_list", None)
     return CharacterProfile(id="preview", created_at=datetime.now(timezone.utc), **char)
 
@@ -274,6 +296,7 @@ async def confirm_character(character_data: CharacterProfile, authorization: str
         "love_history": character_data.love_history,
         "current_romance_status": character_data.current_romance_status,
         "narrative_profile": character_data.narrative_profile,
+        "avatar_url": character_data.avatar_url,
     }
     result = supabase.table("characters").insert(save_data).execute()
     saved = result.data[0]

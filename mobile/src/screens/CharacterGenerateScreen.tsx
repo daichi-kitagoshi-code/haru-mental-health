@@ -1,7 +1,7 @@
 import React, { useState, useRef } from "react";
 import {
   View, Text, TouchableOpacity, StyleSheet, ActivityIndicator,
-  ScrollView, Alert, Animated, Dimensions,
+  ScrollView, Alert, Animated, Dimensions, Image,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { COLORS, SPACING, SHADOW } from "../constants/theme";
@@ -19,7 +19,7 @@ export interface CharacterProfile {
   occupation?: string; current_city?: string;
   family_background?: string; childhood_story?: string;
   love_history?: string; current_romance_status?: string;
-  work_hours?: string; narrative_profile?: string;
+  work_hours?: string; narrative_profile?: string; avatar_url?: string;
 }
 
 const GENDER_LABELS: Record<Gender, string> = { male: "男性", female: "女性", other: "どちらでもない" };
@@ -83,9 +83,13 @@ export default function CharacterGenerateScreen({
               transform: [{ translateY: slideAnim }], opacity: opacityAnim,
             }]}>
               <View style={s.cardHeader}>
-                <View style={s.charAvatar}>
-                  <Text style={s.charAvatarText}>{preview.name[0]}</Text>
-                </View>
+                {preview.avatar_url ? (
+                  <Image source={{ uri: preview.avatar_url }} style={s.charAvatarImg} />
+                ) : (
+                  <View style={s.charAvatar}>
+                    <Text style={s.charAvatarText}>{preview.name[0]}</Text>
+                  </View>
+                )}
                 <View>
                   <Text style={s.charName}>{preview.name}</Text>
                   <Text style={s.charMeta}>
@@ -187,8 +191,9 @@ const s = StyleSheet.create({
     padding: SPACING.lg, marginBottom: SPACING.lg, borderWidth: 1, borderColor: COLORS.border,
   },
   cardHeader: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: SPACING.md },
+  charAvatarImg: { width: 56, height: 56, borderRadius: 28 },
   charAvatar: {
-    width: 52, height: 52, borderRadius: 26,
+    width: 56, height: 56, borderRadius: 28,
     backgroundColor: COLORS.accent1 + "18", justifyContent: "center", alignItems: "center",
   },
   charAvatarText: { fontSize: 22, fontWeight: "700", color: COLORS.accent1 },

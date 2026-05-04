@@ -1,6 +1,6 @@
 import React from "react";
 import {
-  View, Text, TouchableOpacity, FlatList, StyleSheet, ActivityIndicator,
+  View, Text, TouchableOpacity, FlatList, StyleSheet, ActivityIndicator, Image,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { COLORS, SPACING, SHADOW } from "../constants/theme";
@@ -9,7 +9,7 @@ import { Plus } from "lucide-react-native";
 export interface CharacterProfile {
   id: string; name: string; gender: string; age: number;
   hometown: string; personality: string; speech_style: string;
-  occupation?: string; current_city?: string;
+  occupation?: string; current_city?: string; avatar_url?: string;
 }
 
 interface Props {
@@ -61,11 +61,15 @@ export default function CharacterListScreen({
                 onPress={() => onSelectCharacter(item)}
                 activeOpacity={0.75}
               >
-                <View style={[s.avatar, active && s.avatarActive]}>
-                  <Text style={[s.avatarText, active && s.avatarTextActive]}>
-                    {item.name[0]}
-                  </Text>
-                </View>
+                {item.avatar_url ? (
+                  <Image source={{ uri: item.avatar_url }} style={s.avatarImg} />
+                ) : (
+                  <View style={[s.avatar, active && s.avatarActive]}>
+                    <Text style={[s.avatarText, active && s.avatarTextActive]}>
+                      {item.name[0]}
+                    </Text>
+                  </View>
+                )}
                 <View style={s.info}>
                   <Text style={s.name}>{item.name}</Text>
                   <Text style={s.sub}>
@@ -118,6 +122,7 @@ const s = StyleSheet.create({
     borderWidth: 1, borderColor: COLORS.border,
     ...SHADOW.card,
   },
+  avatarImg: { width: AVATAR_SIZE, height: AVATAR_SIZE, borderRadius: AVATAR_SIZE / 2 },
   avatar: {
     width: AVATAR_SIZE, height: AVATAR_SIZE, borderRadius: AVATAR_SIZE / 2,
     backgroundColor: COLORS.accent1 + "18", justifyContent: "center", alignItems: "center",
