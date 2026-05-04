@@ -107,7 +107,7 @@ async def generate_reply(
     messages.append({"role": "user", "content": user_message})
 
     response = client.messages.create(
-        model="claude-sonnet-4-6-20250514",
+        model="claude-sonnet-4-6",
         max_tokens=512,
         system=system_prompt,
         messages=messages,
