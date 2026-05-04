@@ -163,10 +163,8 @@ async def generate_character_preview(request: CharacterGenerateRequest, authoriz
     )
 
 
-@router.post("/confirm/{preview_gender}/{preview_age_group}", response_model=CharacterProfile)
+@router.post("/confirm", response_model=CharacterProfile)
 async def confirm_character(
-    preview_gender: str,
-    preview_age_group: str,
     character_data: CharacterProfile,
     authorization: str = Header(...),
 ):
