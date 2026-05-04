@@ -7,7 +7,7 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "splash": {
-      "backgroundColor": "#F8B4D9"
+      "backgroundColor": "#FFFFFF"
     },
     "ios": {
       "supportsTablet": false,
@@ -15,7 +15,7 @@
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#F8B4D9"
+        "backgroundColor": "#FFFFFF"
       },
       "package": "com.haru.app"
     },
@@ -23,6 +23,7 @@
       "expo-secure-store",
       "expo-notifications",
       "expo-asset"
-    ]
+    ],
+    "owner": "kitagoshi"
   }
 }

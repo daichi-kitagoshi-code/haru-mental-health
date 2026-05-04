@@ -1,185 +1,215 @@
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import {
-  View, Text, TouchableOpacity, StyleSheet,
-  ActivityIndicator, ScrollView, Alert,
+  View, Text, TouchableOpacity, StyleSheet, ActivityIndicator,
+  ScrollView, Alert, Animated, Dimensions,
 } from "react-native";
-import { COLORS, SPACING } from "../constants/theme";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { COLORS, SPACING, SHADOW } from "../constants/theme";
 import { api } from "../services/api";
+
+const { height: SCREEN_H } = Dimensions.get("window");
 
 type Gender = "male" | "female" | "other";
 type AgeGroup = "same" | "older" | "younger";
 
-interface CharacterProfile {
-  id: string;
-  name: string;
-  gender: string;
-  age: number;
-  hometown: string;
-  education: string;
-  background: string;
-  hobbies: string;
-  personality: string;
-  speech_style: string;
+export interface CharacterProfile {
+  id: string; name: string; gender: string; age: number;
+  hometown: string; education: string; background: string;
+  hobbies: string; personality: string; speech_style: string;
+  occupation?: string; current_city?: string;
+  family_background?: string; childhood_story?: string;
+  love_history?: string; current_romance_status?: string;
+  work_hours?: string; narrative_profile?: string;
 }
 
-const GENDER_LABELS: Record<Gender, string> = {
-  male: "男性", female: "女性", other: "どちらでもない",
-};
-const AGE_LABELS: Record<AgeGroup, string> = {
-  same: "同い年くらい", older: "年上", younger: "年下",
-};
+const GENDER_LABELS: Record<Gender, string> = { male: "男性", female: "女性", other: "どちらでもない" };
+const AGE_LABELS: Record<AgeGroup, string> = { same: "同い年くらい", older: "年上", younger: "年下" };
 
-export default function CharacterGenerateScreen({ onCharacterCreated }: { onCharacterCreated: (c: CharacterProfile) => void }) {
+export default function CharacterGenerateScreen({
+  onCharacterCreated,
+}: {
+  onCharacterCreated: (c: CharacterProfile) => void;
+}) {
   const [gender, setGender] = useState<Gender | null>(null);
   const [ageGroup, setAgeGroup] = useState<AgeGroup | null>(null);
   const [preview, setPreview] = useState<CharacterProfile | null>(null);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  const generatePreview = async () => {
+  const slideAnim = useRef(new Animated.Value(0)).current;
+  const opacityAnim = useRef(new Animated.Value(1)).current;
+
+  const animateIn = () => {
+    slideAnim.setValue(60);
+    opacityAnim.setValue(0);
+    Animated.parallel([
+      Animated.spring(slideAnim, { toValue: 0, useNativeDriver: true, damping: 18, stiffness: 200 }),
+      Animated.timing(opacityAnim, { toValue: 1, duration: 200, useNativeDriver: true }),
+    ]).start();
+  };
+
+  const fetchPreview = async () => {
     if (!gender || !ageGroup) return;
     setLoading(true);
     try {
       const char = await api.characters.generatePreview(gender, ageGroup);
       setPreview(char);
-    } catch (e: any) {
-      Alert.alert("エラー", e.message || "生成に失敗しました");
-    } finally {
-      setLoading(false);
-    }
+      animateIn();
+    } catch (e: any) { Alert.alert("エラー", e.message || "生成に失敗しました"); }
+    finally { setLoading(false); }
   };
 
   const confirmCharacter = async () => {
-    if (!preview || !gender || !ageGroup) return;
+    if (!preview) return;
     setSaving(true);
     try {
       const saved = await api.characters.confirm(preview);
       onCharacterCreated(saved);
-    } catch (e: any) {
-      Alert.alert("エラー", e.message || "保存に失敗しました");
-    } finally {
-      setSaving(false);
-    }
+    } catch (e: any) { Alert.alert("エラー", e.message || "保存に失敗しました"); }
+    finally { setSaving(false); }
   };
 
   if (preview) {
+    const narrative = preview.narrative_profile ||
+      `${preview.hometown}出身、${preview.age}歳。${preview.education}。${preview.background}。趣味は${preview.hobbies}。`;
+
     return (
-      <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-        <Text style={styles.title}>こんな友達はどう？</Text>
-        <View style={styles.profileCard}>
-          <Text style={styles.charName}>{preview.name}</Text>
-          <Text style={styles.charAge}>{preview.age}歳・{preview.hometown}出身</Text>
-          <View style={styles.divider} />
-          <ProfileRow label="学歴" value={preview.education} />
-          <ProfileRow label="経歴" value={preview.background} />
-          <ProfileRow label="趣味" value={preview.hobbies} />
-          <ProfileRow label="性格" value={preview.personality} />
-          <ProfileRow label="話し方" value={preview.speech_style} />
+      <SafeAreaView style={s.container}>
+        <View style={s.flex}>
+          <ScrollView contentContainerStyle={s.scrollContent} showsVerticalScrollIndicator={false}>
+            <Text style={s.stepLabel}>こんな友達はどう？</Text>
+
+            <Animated.View style={[s.card, SHADOW.card, {
+              transform: [{ translateY: slideAnim }], opacity: opacityAnim,
+            }]}>
+              <View style={s.cardHeader}>
+                <View style={s.charAvatar}>
+                  <Text style={s.charAvatarText}>{preview.name[0]}</Text>
+                </View>
+                <View>
+                  <Text style={s.charName}>{preview.name}</Text>
+                  <Text style={s.charMeta}>
+                    {preview.age}歳{preview.occupation ? ` · ${preview.occupation}` : ""}
+                  </Text>
+                </View>
+              </View>
+              <View style={s.divider} />
+              <Text style={s.narrativeText}>{narrative}</Text>
+            </Animated.View>
+
+            <View style={s.spacer} />
+          </ScrollView>
+
+          <View style={s.bottomActions}>
+            <TouchableOpacity style={s.retryLink} onPress={fetchPreview} disabled={loading}>
+              {loading
+                ? <ActivityIndicator size="small" color={COLORS.textSecondary} />
+                : <Text style={s.retryLinkText}>別の子にする</Text>
+              }
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[s.confirmBtn, saving && s.disabled]}
+              onPress={confirmCharacter} disabled={saving}
+            >
+              {saving
+                ? <ActivityIndicator color="#FFF" />
+                : <Text style={s.confirmBtnText}>この子と話す</Text>
+              }
+            </TouchableOpacity>
+          </View>
         </View>
-
-        <TouchableOpacity style={styles.primaryButton} onPress={confirmCharacter} disabled={saving}>
-          {saving ? <ActivityIndicator color="#FFF" /> : <Text style={styles.primaryButtonText}>この子と話す ✨</Text>}
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.secondaryButton} onPress={generatePreview} disabled={loading}>
-          {loading ? <ActivityIndicator color={COLORS.primary} /> : <Text style={styles.secondaryButtonText}>別の子にする</Text>}
-        </TouchableOpacity>
-      </ScrollView>
+      </SafeAreaView>
     );
   }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <Text style={styles.title}>友達を作る</Text>
-      <Text style={styles.subtitle}>2つだけ選んで、あとは自動で決まるよ</Text>
+    <SafeAreaView style={s.container}>
+      <ScrollView contentContainerStyle={s.scrollContent} showsVerticalScrollIndicator={false}>
+        <Text style={s.title}>友達を作る</Text>
+        <Text style={s.subtitle}>2つだけ選んで、あとは自動で決まるよ</Text>
 
-      <Text style={styles.sectionLabel}>性別</Text>
-      <View style={styles.optionRow}>
-        {(["female", "male", "other"] as Gender[]).map(g => (
-          <TouchableOpacity
-            key={g}
-            style={[styles.optionButton, gender === g && styles.optionSelected]}
-            onPress={() => setGender(g)}
-          >
-            <Text style={[styles.optionText, gender === g && styles.optionTextSelected]}>
-              {GENDER_LABELS[g]}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
+        <Text style={s.sectionLabel}>性別</Text>
+        <View style={s.optionRow}>
+          {(["female", "male", "other"] as Gender[]).map(g => (
+            <TouchableOpacity key={g}
+              style={[s.option, gender === g && s.optionActive]}
+              onPress={() => setGender(g)}>
+              <Text style={[s.optionText, gender === g && s.optionTextActive]}>{GENDER_LABELS[g]}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
 
-      <Text style={styles.sectionLabel}>年齢層</Text>
-      <View style={styles.optionRow}>
-        {(["same", "older", "younger"] as AgeGroup[]).map(a => (
-          <TouchableOpacity
-            key={a}
-            style={[styles.optionButton, ageGroup === a && styles.optionSelected]}
-            onPress={() => setAgeGroup(a)}
-          >
-            <Text style={[styles.optionText, ageGroup === a && styles.optionTextSelected]}>
-              {AGE_LABELS[a]}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
+        <Text style={s.sectionLabel}>年齢層</Text>
+        <View style={s.optionRow}>
+          {(["same", "older", "younger"] as AgeGroup[]).map(a => (
+            <TouchableOpacity key={a}
+              style={[s.option, ageGroup === a && s.optionActive]}
+              onPress={() => setAgeGroup(a)}>
+              <Text style={[s.optionText, ageGroup === a && s.optionTextActive]}>{AGE_LABELS[a]}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
 
-      <TouchableOpacity
-        style={[styles.primaryButton, (!gender || !ageGroup) && styles.buttonDisabled]}
-        onPress={generatePreview}
-        disabled={!gender || !ageGroup || loading}
-      >
-        {loading
-          ? <ActivityIndicator color="#FFF" />
-          : <Text style={styles.primaryButtonText}>友達を生成する 🎲</Text>
-        }
-      </TouchableOpacity>
-    </ScrollView>
+        <TouchableOpacity
+          style={[s.confirmBtn, s.confirmBtnTop, (!gender || !ageGroup || loading) && s.disabled]}
+          onPress={fetchPreview} disabled={!gender || !ageGroup || loading}>
+          {loading
+            ? <ActivityIndicator color="#FFF" />
+            : <Text style={s.confirmBtnText}>生成する</Text>
+          }
+        </TouchableOpacity>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
-function ProfileRow({ label, value }: { label: string; value: string }) {
-  return (
-    <View style={styles.profileRow}>
-      <Text style={styles.profileLabel}>{label}</Text>
-      <Text style={styles.profileValue}>{value}</Text>
-    </View>
-  );
-}
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.background },
-  content: { padding: SPACING.lg, paddingBottom: 60 },
-  title: { fontSize: 26, fontWeight: "700", color: COLORS.text, textAlign: "center", marginBottom: SPACING.xs },
-  subtitle: { fontSize: 14, color: COLORS.textSecondary, textAlign: "center", marginBottom: SPACING.xl },
-  sectionLabel: { fontSize: 16, fontWeight: "600", color: COLORS.text, marginBottom: SPACING.sm, marginTop: SPACING.md },
-  optionRow: { flexDirection: "row", gap: SPACING.sm, marginBottom: SPACING.sm },
-  optionButton: {
-    flex: 1, paddingVertical: SPACING.sm, paddingHorizontal: SPACING.xs,
-    borderRadius: 10, borderWidth: 1.5, borderColor: COLORS.border,
-    alignItems: "center", backgroundColor: COLORS.surface,
+const s = StyleSheet.create({
+  container: { flex: 1, backgroundColor: COLORS.bg },
+  flex: { flex: 1 },
+  scrollContent: { paddingHorizontal: SPACING.md, paddingTop: SPACING.lg, paddingBottom: 120 },
+  title: { fontSize: 28, fontWeight: "700", color: COLORS.text, marginBottom: SPACING.sm },
+  subtitle: { fontSize: 14, color: COLORS.textSecondary, marginBottom: SPACING.xl, lineHeight: 22 },
+  stepLabel: { fontSize: 22, fontWeight: "700", color: COLORS.text, marginBottom: SPACING.lg },
+  sectionLabel: {
+    fontSize: 12, color: COLORS.textSecondary, letterSpacing: 1,
+    textTransform: "uppercase", marginBottom: SPACING.sm, marginTop: SPACING.lg,
   },
-  optionSelected: { borderColor: COLORS.primary, backgroundColor: COLORS.primary + "15" },
+  optionRow: { flexDirection: "row", gap: SPACING.sm },
+  option: {
+    flex: 1, paddingVertical: 12, borderRadius: 10,
+    backgroundColor: COLORS.subBg, alignItems: "center",
+  },
+  optionActive: { backgroundColor: COLORS.text },
   optionText: { fontSize: 14, color: COLORS.textSecondary, fontWeight: "500" },
-  optionTextSelected: { color: COLORS.primary, fontWeight: "700" },
-  primaryButton: {
-    backgroundColor: COLORS.primary, borderRadius: 14, paddingVertical: 16,
-    alignItems: "center", marginTop: SPACING.xl,
+  optionTextActive: { color: "#FFF", fontWeight: "700" },
+  card: {
+    backgroundColor: COLORS.surface, borderRadius: 20,
+    padding: SPACING.lg, marginBottom: SPACING.lg, borderWidth: 1, borderColor: COLORS.border,
   },
-  primaryButtonText: { color: "#FFF", fontSize: 17, fontWeight: "700" },
-  secondaryButton: {
-    borderRadius: 14, paddingVertical: 14, alignItems: "center", marginTop: SPACING.md,
-    borderWidth: 1.5, borderColor: COLORS.primary,
+  cardHeader: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: SPACING.md },
+  charAvatar: {
+    width: 52, height: 52, borderRadius: 26,
+    backgroundColor: COLORS.accent1 + "18", justifyContent: "center", alignItems: "center",
   },
-  secondaryButtonText: { color: COLORS.primary, fontSize: 16, fontWeight: "600" },
-  buttonDisabled: { opacity: 0.45 },
-  profileCard: {
-    backgroundColor: COLORS.surface, borderRadius: 16, padding: SPACING.lg,
-    marginBottom: SPACING.lg,
-  },
-  charName: { fontSize: 28, fontWeight: "800", color: COLORS.text, textAlign: "center" },
-  charAge: { fontSize: 15, color: COLORS.textSecondary, textAlign: "center", marginTop: 4, marginBottom: SPACING.md },
+  charAvatarText: { fontSize: 22, fontWeight: "700", color: COLORS.accent1 },
+  charName: { fontSize: 22, fontWeight: "700", color: COLORS.text },
+  charMeta: { fontSize: 13, color: COLORS.textSecondary, marginTop: 2 },
   divider: { height: 1, backgroundColor: COLORS.border, marginBottom: SPACING.md },
-  profileRow: { flexDirection: "row", marginBottom: SPACING.sm },
-  profileLabel: { width: 55, fontSize: 13, color: COLORS.textSecondary, fontWeight: "600" },
-  profileValue: { flex: 1, fontSize: 14, color: COLORS.text },
+  narrativeText: { fontSize: 15, color: COLORS.text, lineHeight: 27 },
+  spacer: { height: 20 },
+  bottomActions: {
+    position: "absolute", bottom: 0, left: 0, right: 0,
+    paddingHorizontal: SPACING.md, paddingBottom: 36, paddingTop: SPACING.sm,
+    backgroundColor: COLORS.bg,
+    borderTopWidth: 1, borderTopColor: COLORS.border,
+    gap: 4,
+  },
+  retryLink: { paddingVertical: 10, alignItems: "center" },
+  retryLinkText: { color: COLORS.textSecondary, fontSize: 14 },
+  confirmBtn: {
+    backgroundColor: COLORS.text, borderRadius: 14, paddingVertical: 17, alignItems: "center",
+  },
+  confirmBtnTop: { marginTop: SPACING.xl },
+  confirmBtnText: { color: "#FFF", fontSize: 17, fontWeight: "700" },
+  disabled: { opacity: 0.4 },
 });

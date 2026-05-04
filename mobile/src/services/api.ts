@@ -48,7 +48,7 @@ export const api = {
         body: JSON.stringify({ gender, age_group: ageGroup }),
       }),
     confirm: (character: any) =>
-      request(`/characters/confirm/${character.gender}/${character.age}`, {
+      request("/characters/confirm", {
         method: "POST",
         body: JSON.stringify(character),
       }),
@@ -59,6 +59,13 @@ export const api = {
       }),
     delete: (characterId: string) =>
       request(`/characters/${characterId}`, { method: "DELETE" }),
+  },
+
+  posts: {
+    getFeed: () => request("/posts/feed"),
+    getCharacterPosts: (characterId: string) => request(`/posts/character/${characterId}`),
+    generatePost: (characterId: string) =>
+      request(`/posts/generate/${characterId}`, { method: "POST" }),
   },
 
   notifications: {

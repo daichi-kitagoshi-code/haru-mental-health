@@ -1,21 +1,26 @@
 export const COLORS = {
-  primary: "#F8B4D9",
-  primaryDark: "#E991C4",
-  secondary: "#A78BFA",
-  background: "#FFF5F9",
+  bg: "#FFFFFF",
+  subBg: "#F8F4F0",
   surface: "#FFFFFF",
-  text: "#1F2937",
-  textSecondary: "#6B7280",
-  textLight: "#9CA3AF",
-  border: "#F3F4F6",
-  success: "#10B981",
-  warning: "#F59E0B",
-  error: "#EF4444",
-  mood1: "#EF4444",
-  mood2: "#F97316",
-  mood3: "#EAB308",
-  mood4: "#84CC16",
-  mood5: "#10B981",
+  border: "#F0EDE8",
+  text: "#1A1A1A",
+  textSecondary: "#999999",
+  textLight: "#BBBBBB",
+  accent1: "#FF6B6B",
+  accent2: "#6B9FFF",
+  // Chat
+  userBubble: "#1A1A1A",
+  userBubbleText: "#FFFFFF",
+  aiBubble: "#F8F4F0",
+  aiText: "#1A1A1A",
+  // Misc
+  error: "#FF4444",
+  // Backward compat aliases
+  background: "#FFFFFF",
+  primary: "#FF6B6B",
+  primaryDark: "#E55555",
+  secondary: "#6B9FFF",
+  textTertiary: "#CCCCCC",
 };
 
 export const FONTS = {
@@ -28,5 +33,15 @@ export const SPACING = {
   sm: 8,
   md: 16,
   lg: 24,
-  xl: 32,
+  xl: 40,
+};
+
+export const SHADOW = {
+  card: {
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    elevation: 3,
+  },
 };

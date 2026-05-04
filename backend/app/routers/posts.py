@@ -50,12 +50,16 @@ async def get_feed(authorization: str = Header(...)):
 
         for post in (existing.data or []):
             feed.append({
-                "post": post,
-                "character": char,
+                "id": post["id"],
+                "character_id": char["id"],
+                "character_name": char["name"],
+                "content": post["content"],
+                "post_type": post.get("post_type", "daily"),
+                "created_at": post["created_at"],
             })
 
-    # Sort by scheduled_at descending
-    feed.sort(key=lambda x: x["post"]["scheduled_at"], reverse=True)
+    # Sort by created_at descending
+    feed.sort(key=lambda x: x["created_at"], reverse=True)
     return feed
 
 
