@@ -1,24 +1,34 @@
 import React, { useState, useRef, useCallback, useEffect } from "react";
 import {
   View, Text, TextInput, TouchableOpacity, FlatList,
-  StyleSheet, KeyboardAvoidingView, Platform, ActivityIndicator,
-  Linking, Animated, Image,
+  StyleSheet, KeyboardAvoidingView, Platform, Animated, Image, Linking,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
-import { COLORS, SPACING } from "../constants/theme";
+import { C, GRAD } from "../constants/colors";
+import { FONT, SIZE, SP, RADIUS, SHADOW } from "../constants/typography";
 import { api } from "../services/api";
-import { ArrowUp, ChevronLeft } from "lucide-react-native";
+import { ChevronLeft } from "lucide-react-native";
 
 type Message = {
-  id: string; role: "user" | "assistant"; content: string;
-  crisisResources?: string[]; ts: number;
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  crisisResources?: string[];
+  ts: number;
 };
 
 export interface CharacterProfile {
-  id: string; name: string; gender: string; age: number;
-  hometown: string; personality: string; speech_style: string;
-  occupation?: string; current_city?: string; avatar_url?: string;
+  id: string;
+  name: string;
+  gender: string;
+  age: number;
+  hometown: string;
+  personality: string;
+  speech_style: string;
+  occupation?: string;
+  current_city?: string;
+  avatar_url?: string;
 }
 
 interface Props {
@@ -30,41 +40,58 @@ function shouldShowTs(prev: Message | undefined, curr: Message) {
   if (!prev) return true;
   return curr.ts - prev.ts > 5 * 60 * 1000;
 }
+
 function fmtTime(ts: number) {
   const d = new Date(ts);
   return `${d.getHours()}:${String(d.getMinutes()).padStart(2, "0")}`;
 }
 
-function TypingIndicator() {
-  const dots = [useRef(new Animated.Value(0)).current, useRef(new Animated.Value(0)).current, useRef(new Animated.Value(0)).current];
+function TypingDots() {
+  const scales = [
+    useRef(new Animated.Value(1)).current,
+    useRef(new Animated.Value(1)).current,
+    useRef(new Animated.Value(1)).current,
+  ];
+  const opacities = [
+    useRef(new Animated.Value(0.4)).current,
+    useRef(new Animated.Value(0.4)).current,
+    useRef(new Animated.Value(0.4)).current,
+  ];
+
   useEffect(() => {
-    const anims = dots.map((d, i) =>
-      Animated.loop(Animated.sequence([
-        Animated.delay(i * 150),
-        Animated.timing(d, { toValue: -6, duration: 250, useNativeDriver: true }),
-        Animated.timing(d, { toValue: 0, duration: 250, useNativeDriver: true }),
-        Animated.delay(450),
-      ]))
+    const anims = scales.map((s, i) =>
+      Animated.loop(
+        Animated.sequence([
+          Animated.delay(i * 160),
+          Animated.parallel([
+            Animated.timing(s, { toValue: 1.4, duration: 220, useNativeDriver: true }),
+            Animated.timing(opacities[i], { toValue: 1, duration: 220, useNativeDriver: true }),
+          ]),
+          Animated.parallel([
+            Animated.timing(s, { toValue: 1, duration: 220, useNativeDriver: true }),
+            Animated.timing(opacities[i], { toValue: 0.4, duration: 220, useNativeDriver: true }),
+          ]),
+          Animated.delay(320),
+        ])
+      )
     );
     anims.forEach(a => a.start());
     return () => anims.forEach(a => a.stop());
   }, []);
+
   return (
-    <View style={ty.row}>
-      {dots.map((d, i) => (
-        <Animated.View key={i} style={[ty.dot, { transform: [{ translateY: d }] }]} />
+    <View style={ty.wrap}>
+      {scales.map((s, i) => (
+        <Animated.View
+          key={i}
+          style={[ty.dot, { transform: [{ scale: s }], opacity: opacities[i] }]}
+        />
       ))}
     </View>
   );
 }
-const ty = StyleSheet.create({
-  row: {
-    flexDirection: "row", gap: 5, alignSelf: "flex-start",
-    backgroundColor: COLORS.aiBubble, borderRadius: 20, borderBottomLeftRadius: 4,
-    paddingHorizontal: 16, paddingVertical: 14, marginVertical: 3, marginLeft: SPACING.sm,
-  },
-  dot: { width: 7, height: 7, borderRadius: 3.5, backgroundColor: COLORS.accent1 },
-});
+
+const QUICK_REPLIES = ["うん、そうだね", "ありがとう！", "どうして？", "もう少し聞かせて"];
 
 export default function ChatScreen({ character, onBack }: Props) {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -73,30 +100,36 @@ export default function ChatScreen({ character, onBack }: Props) {
   const flatListRef = useRef<FlatList>(null);
 
   useEffect(() => {
-    if (messages.length === 0) {
-      setMessages([{
-        id: "greeting", role: "assistant",
-        content: `${character.name}だよ。何でも話してね 😊`,
-        ts: Date.now(),
-      }]);
-    }
+    setMessages([{
+      id: "greeting",
+      role: "assistant",
+      content: `${character.name}だよ。何でも話してね 😊`,
+      ts: Date.now(),
+    }]);
   }, [character.id]);
 
-  const sendMessage = useCallback(async () => {
-    if (!inputText.trim() || isLoading) return;
-    const userMsg: Message = { id: Date.now().toString(), role: "user", content: inputText.trim(), ts: Date.now() };
+  const sendMessage = useCallback(async (text?: string) => {
+    const msg = (text ?? inputText).trim();
+    if (!msg || isLoading) return;
+    const userMsg: Message = { id: Date.now().toString(), role: "user", content: msg, ts: Date.now() };
     setMessages(prev => [...prev, userMsg]);
-    setInputText(""); setIsLoading(true);
+    setInputText("");
+    setIsLoading(true);
     try {
-      const resp = await api.chat.sendMessage(userMsg.content, character.id);
+      const resp = await api.chat.sendMessage(msg, character.id);
       setMessages(prev => [...prev, {
-        id: (Date.now() + 1).toString(), role: "assistant",
-        content: resp.reply, crisisResources: resp.crisis_resources, ts: Date.now(),
+        id: (Date.now() + 1).toString(),
+        role: "assistant",
+        content: resp.reply,
+        crisisResources: resp.crisis_resources,
+        ts: Date.now(),
       }]);
     } catch {
       setMessages(prev => [...prev, {
-        id: (Date.now() + 1).toString(), role: "assistant",
-        content: "ちょっと返せなかった…もう一回言って？", ts: Date.now(),
+        id: (Date.now() + 1).toString(),
+        role: "assistant",
+        content: "ちょっと返せなかった…もう一回言って？",
+        ts: Date.now(),
       }]);
     } finally {
       setIsLoading(false);
@@ -109,24 +142,31 @@ export default function ChatScreen({ character, onBack }: Props) {
     const isUser = item.role === "user";
     return (
       <>
-        {shouldShowTs(prev, item) && <Text style={s.ts}>{fmtTime(item.ts)}</Text>}
+        {shouldShowTs(prev, item) && (
+          <Text style={s.ts}>{fmtTime(item.ts)}</Text>
+        )}
         <View style={[s.row, isUser ? s.rowRight : s.rowLeft]}>
           {!isUser && (
             character.avatar_url ? (
               <Image source={{ uri: character.avatar_url }} style={s.avatarImg} />
             ) : (
               <View style={s.avatar}>
-                <Text style={s.avatarText}>{character.name[0]}</Text>
+                <Text style={s.avatarInitial}>{character.name[0]}</Text>
               </View>
             )
           )}
           <View style={[s.bubble, isUser ? s.userBubble : s.aiBubble]}>
-            <Text style={[s.bubbleText, isUser ? s.userText : s.aiText]}>{item.content}</Text>
+            <Text style={[s.bubbleText, isUser ? s.userText : s.aiText]}>
+              {item.content}
+            </Text>
             {item.crisisResources && item.crisisResources.length > 0 && (
               <View style={s.crisis}>
                 <Text style={s.crisisTitle}>もし辛くなったら</Text>
                 {item.crisisResources.map((r, i) => (
-                  <TouchableOpacity key={i} onPress={() => Linking.openURL(`tel:${r.split(/[（(]/)[0].trim()}`)}>
+                  <TouchableOpacity
+                    key={i}
+                    onPress={() => Linking.openURL(`tel:${r.split(/[（(]/)[0].trim()}`)}
+                  >
                     <Text style={s.crisisLink}>{r}</Text>
                   </TouchableOpacity>
                 ))}
@@ -138,32 +178,43 @@ export default function ChatScreen({ character, onBack }: Props) {
     );
   };
 
-  const location = character.current_city || character.hometown;
+  const showQuickReplies = messages.length <= 2 && !isLoading;
 
   return (
     <SafeAreaView style={s.container} edges={["top"]}>
+      {/* Header */}
       <View style={s.header}>
-        {onBack && (
-          <TouchableOpacity onPress={onBack} style={s.backBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-            <ChevronLeft size={22} color={COLORS.text} strokeWidth={1.5} />
-          </TouchableOpacity>
-        )}
+        <TouchableOpacity
+          onPress={onBack}
+          style={s.backBtn}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <ChevronLeft size={20} color={C.text} strokeWidth={2} />
+        </TouchableOpacity>
+
         <View style={s.headerCenter}>
-          {character.avatar_url ? (
-            <Image source={{ uri: character.avatar_url }} style={s.headerAvatarImg} />
-          ) : (
-            <View style={s.headerAvatar}>
-              <Text style={s.headerAvatarText}>{character.name[0]}</Text>
-            </View>
-          )}
+          <View style={s.avatarWrap}>
+            {character.avatar_url ? (
+              <Image source={{ uri: character.avatar_url }} style={s.headerAvatarImg} />
+            ) : (
+              <View style={s.headerAvatar}>
+                <Text style={s.headerAvatarInitial}>{character.name[0]}</Text>
+              </View>
+            )}
+            <View style={s.onlineDot} />
+          </View>
           <View>
             <Text style={s.headerName}>{character.name}</Text>
-            <Text style={s.headerSub}>{character.age}歳 · {location}</Text>
+            <Text style={s.headerOnline}>オンライン</Text>
           </View>
         </View>
       </View>
 
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined} keyboardVerticalOffset={0}>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        keyboardVerticalOffset={0}
+      >
         <FlatList
           ref={flatListRef}
           data={messages}
@@ -172,29 +223,59 @@ export default function ChatScreen({ character, onBack }: Props) {
           contentContainerStyle={s.list}
           onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: false })}
           showsVerticalScrollIndicator={false}
-          ListFooterComponent={isLoading ? <TypingIndicator /> : null}
+          ListFooterComponent={isLoading ? (
+            <View style={s.rowLeft}>
+              {character.avatar_url ? (
+                <Image source={{ uri: character.avatar_url }} style={s.avatarImg} />
+              ) : (
+                <View style={s.avatar}>
+                  <Text style={s.avatarInitial}>{character.name[0]}</Text>
+                </View>
+              )}
+              <TypingDots />
+            </View>
+          ) : null}
         />
 
+        {/* Quick replies */}
+        {showQuickReplies && (
+          <View style={s.quickWrap}>
+            {QUICK_REPLIES.map(q => (
+              <TouchableOpacity
+                key={q}
+                style={s.quickChip}
+                onPress={() => sendMessage(q)}
+              >
+                <Text style={s.quickText}>{q}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+
+        {/* Input bar */}
         <View style={s.inputBar}>
           <TextInput
             style={s.input}
             value={inputText}
             onChangeText={setInputText}
             placeholder="メッセージ"
-            placeholderTextColor={COLORS.textSecondary}
-            multiline maxLength={2000}
+            placeholderTextColor={C.textTertiary}
+            multiline
+            maxLength={2000}
+            returnKeyType="default"
           />
           <TouchableOpacity
-            style={[s.sendBtnWrap, (!inputText.trim() || isLoading) && s.sendDisabled]}
-            onPress={sendMessage}
+            onPress={() => sendMessage()}
             disabled={!inputText.trim() || isLoading}
+            activeOpacity={0.85}
           >
             <LinearGradient
-              colors={["#FF6B6B", "#FF8E53"]}
-              style={s.sendBtn}
-              start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+              colors={GRAD}
+              style={[s.sendBtn, (!inputText.trim() || isLoading) && s.sendDisabled]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
             >
-              <ArrowUp size={18} color="#FFF" strokeWidth={2.5} />
+              <Text style={s.sendArrow}>↑</Text>
             </LinearGradient>
           </TouchableOpacity>
         </View>
@@ -203,57 +284,242 @@ export default function ChatScreen({ character, onBack }: Props) {
   );
 }
 
+const ty = StyleSheet.create({
+  wrap: {
+    flexDirection: "row",
+    gap: 5,
+    backgroundColor: C.bgSecondary,
+    borderRadius: 18,
+    borderBottomLeftRadius: 4,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    marginVertical: 2,
+  },
+  dot: {
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
+    backgroundColor: C.textSecondary,
+  },
+});
+
 const s = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.bg },
+  container: { flex: 1, backgroundColor: C.bg },
+
+  // Header
   header: {
-    flexDirection: "row", alignItems: "center",
-    paddingHorizontal: SPACING.md, paddingVertical: 10,
-    borderBottomWidth: 1, borderBottomColor: COLORS.border,
-    backgroundColor: COLORS.bg,
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: SP.md,
+    paddingVertical: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: C.border,
+    backgroundColor: C.bg,
+    gap: SP.sm,
   },
-  backBtn: { marginRight: SPACING.sm },
-  headerCenter: { flexDirection: "row", alignItems: "center", gap: 10, flex: 1 },
-  headerAvatarImg: { width: 36, height: 36, borderRadius: 18 },
+  backBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: C.bgSecondary,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  headerCenter: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  avatarWrap: { position: "relative" },
+  headerAvatarImg: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+  },
   headerAvatar: {
-    width: 36, height: 36, borderRadius: 18,
-    backgroundColor: COLORS.accent1 + "22", justifyContent: "center", alignItems: "center",
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: C.accentSoft,
+    justifyContent: "center",
+    alignItems: "center",
   },
-  headerAvatarText: { fontSize: 15, fontWeight: "700", color: COLORS.accent1 },
-  headerName: { fontSize: 15, fontWeight: "700", color: COLORS.text },
-  headerSub: { fontSize: 12, color: COLORS.textSecondary },
-  list: { paddingHorizontal: SPACING.md, paddingTop: SPACING.md, paddingBottom: SPACING.sm },
-  ts: { textAlign: "center", fontSize: 11, color: COLORS.textSecondary, marginVertical: 12 },
-  row: { flexDirection: "row", marginVertical: 2, alignItems: "flex-end" },
+  headerAvatarInitial: {
+    fontFamily: FONT.bold,
+    fontSize: SIZE.body1,
+    color: C.accent,
+  },
+  onlineDot: {
+    position: "absolute",
+    bottom: 1,
+    right: 1,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: C.online,
+    borderWidth: 1.5,
+    borderColor: C.bg,
+  },
+  headerName: {
+    fontFamily: FONT.bold,
+    fontSize: SIZE.body1,
+    color: C.text,
+  },
+  headerOnline: {
+    fontFamily: FONT.regular,
+    fontSize: SIZE.caption,
+    color: C.online,
+    marginTop: 1,
+  },
+
+  // List
+  list: {
+    paddingHorizontal: SP.md,
+    paddingTop: SP.md,
+    paddingBottom: SP.sm,
+  },
+  ts: {
+    textAlign: "center",
+    fontFamily: FONT.regular,
+    fontSize: SIZE.label,
+    color: C.textTertiary,
+    marginVertical: 12,
+  },
+  row: {
+    flexDirection: "row",
+    marginVertical: 2,
+    alignItems: "flex-end",
+  },
   rowLeft: { justifyContent: "flex-start" },
   rowRight: { justifyContent: "flex-end" },
-  avatarImg: { width: 28, height: 28, borderRadius: 14, marginRight: 6, marginBottom: 2 },
-  avatar: {
-    width: 28, height: 28, borderRadius: 14,
-    backgroundColor: COLORS.accent1 + "22", justifyContent: "center", alignItems: "center",
-    marginRight: 6, marginBottom: 2,
+  avatarImg: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    marginRight: 6,
+    marginBottom: 2,
   },
-  avatarText: { fontSize: 11, fontWeight: "700", color: COLORS.accent1 },
-  bubble: { maxWidth: "78%", paddingHorizontal: 14, paddingVertical: 10 },
-  userBubble: { backgroundColor: COLORS.userBubble, borderRadius: 20, borderBottomRightRadius: 4 },
-  aiBubble: { backgroundColor: COLORS.aiBubble, borderRadius: 20, borderBottomLeftRadius: 4 },
-  bubbleText: { fontSize: 16, lineHeight: 24 },
-  userText: { color: COLORS.userBubbleText },
-  aiText: { color: COLORS.aiText },
-  crisis: { marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: COLORS.border },
-  crisisTitle: { fontSize: 12, color: COLORS.textSecondary, marginBottom: 4 },
-  crisisLink: { fontSize: 13, color: COLORS.accent2 },
+  avatar: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: C.accentSoft,
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 6,
+    marginBottom: 2,
+  },
+  avatarInitial: {
+    fontFamily: FONT.bold,
+    fontSize: SIZE.label,
+    color: C.accent,
+  },
+
+  // Bubbles
+  bubble: {
+    maxWidth: "78%",
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  userBubble: {
+    backgroundColor: C.black,
+    borderRadius: 18,
+    borderBottomRightRadius: 4,
+  },
+  aiBubble: {
+    backgroundColor: C.bgSecondary,
+    borderRadius: 4,
+    borderTopRightRadius: 18,
+    borderBottomLeftRadius: 18,
+    borderBottomRightRadius: 18,
+  },
+  bubbleText: {
+    fontFamily: FONT.regular,
+    fontSize: SIZE.body,
+    lineHeight: SIZE.body * 1.6,
+  },
+  userText: { color: C.white },
+  aiText: { color: C.text },
+
+  // Crisis
+  crisis: {
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: C.border,
+  },
+  crisisTitle: {
+    fontFamily: FONT.medium,
+    fontSize: SIZE.caption,
+    color: C.textSecondary,
+    marginBottom: 4,
+  },
+  crisisLink: {
+    fontFamily: FONT.regular,
+    fontSize: SIZE.small,
+    color: C.accent,
+  },
+
+  // Quick replies
+  quickWrap: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: SP.xs,
+    paddingHorizontal: SP.md,
+    paddingBottom: SP.sm,
+  },
+  quickChip: {
+    backgroundColor: C.bg,
+    borderWidth: 1,
+    borderColor: C.border,
+    borderRadius: RADIUS.pill,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+  },
+  quickText: {
+    fontFamily: FONT.regular,
+    fontSize: SIZE.small,
+    color: C.text,
+  },
+
+  // Input
   inputBar: {
-    flexDirection: "row", alignItems: "flex-end", gap: SPACING.sm,
-    paddingHorizontal: SPACING.md, paddingVertical: SPACING.sm,
-    paddingBottom: Platform.OS === "ios" ? 20 : SPACING.sm,
-    backgroundColor: COLORS.bg, borderTopWidth: 1, borderTopColor: COLORS.border,
+    flexDirection: "row",
+    alignItems: "flex-end",
+    gap: SP.sm,
+    paddingHorizontal: SP.md,
+    paddingTop: SP.sm,
+    paddingBottom: Platform.OS === "ios" ? 28 : SP.md,
+    backgroundColor: C.bg,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: C.border,
   },
   input: {
-    flex: 1, backgroundColor: COLORS.subBg, borderRadius: 24,
-    paddingHorizontal: SPACING.md, paddingVertical: 10,
-    fontSize: 16, color: COLORS.text, maxHeight: 120, lineHeight: 22,
+    flex: 1,
+    backgroundColor: C.bgSecondary,
+    borderRadius: RADIUS.pill,
+    paddingHorizontal: SP.md,
+    paddingVertical: 11,
+    fontFamily: FONT.regular,
+    fontSize: SIZE.body,
+    color: C.text,
+    maxHeight: 120,
+    lineHeight: SIZE.body * 1.5,
   },
-  sendBtnWrap: { borderRadius: 20 },
-  sendBtn: { width: 40, height: 40, borderRadius: 20, justifyContent: "center", alignItems: "center" },
-  sendDisabled: { opacity: 0.4 },
+  sendBtn: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    justifyContent: "center",
+    alignItems: "center",
+    ...SHADOW.medium,
+  },
+  sendArrow: {
+    color: C.white,
+    fontSize: 18,
+    fontWeight: "700",
+    marginTop: -1,
+  },
+  sendDisabled: { opacity: 0.35 },
 });

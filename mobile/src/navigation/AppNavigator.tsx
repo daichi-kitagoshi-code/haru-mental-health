@@ -3,25 +3,25 @@ import {
   View, Text, TouchableOpacity, ActivityIndicator, StyleSheet, Platform,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { COLORS, SPACING } from "../constants/theme";
+import { C } from "../constants/colors";
+import { FONT, SIZE, SP, SHADOW } from "../constants/typography";
 import * as SecureStore from "expo-secure-store";
 import { api } from "../services/api";
-import { Users, MessageCircle, Compass, Settings } from "lucide-react-native";
+import { Home, MessageCircle, Users, Settings } from "lucide-react-native";
 
 import OnboardingScreen from "../screens/OnboardingScreen";
-import CharacterGenerateScreen, { CharacterProfile } from "../screens/CharacterGenerateScreen";
-import CharacterListScreen from "../screens/CharacterListScreen";
+import HomeScreen, { CharacterProfile } from "../screens/HomeScreen";
+import CharacterGenerateScreen from "../screens/CharacterGenerateScreen";
 import CharacterProfileScreen from "../screens/CharacterProfileScreen";
 import ChatScreen from "../screens/ChatScreen";
-import TodayScreen from "../screens/TodayScreen";
 import SettingsScreen from "../screens/SettingsScreen";
 
-type Tab = "home" | "chat" | "today" | "settings";
+type Tab = "home" | "chat" | "friends" | "settings";
 
 const TABS: { key: Tab; label: string; Icon: any }[] = [
-  { key: "home", label: "友達", Icon: Users },
+  { key: "home", label: "ホーム", Icon: Home },
   { key: "chat", label: "チャット", Icon: MessageCircle },
-  { key: "today", label: "今日", Icon: Compass },
+  { key: "friends", label: "友達", Icon: Users },
   { key: "settings", label: "設定", Icon: Settings },
 ];
 
@@ -86,21 +86,17 @@ export default function AppNavigator() {
 
   const handleSelectCharacter = (c: CharacterProfile) => {
     setSelectedCharacter(c);
-    setProfileCharacter(c);
+    setActiveTab("chat");
   };
 
-  const handleReplyToCharacter = (characterId: string) => {
-    const c = characters.find(ch => ch.id === characterId);
-    if (c) {
-      setSelectedCharacter(c);
-      setActiveTab("chat");
-    }
+  const handleOpenProfile = (c: CharacterProfile) => {
+    setProfileCharacter(c);
   };
 
   if (loading) {
     return (
       <View style={s.loadingWrap}>
-        <ActivityIndicator size="large" color={COLORS.textSecondary} />
+        <ActivityIndicator size="large" color={C.textTertiary} />
       </View>
     );
   }
@@ -108,91 +104,95 @@ export default function AppNavigator() {
   if (!isAuth) return <OnboardingScreen onLoginSuccess={handleLoginSuccess} />;
   if (showGenerate) return <CharacterGenerateScreen onCharacterCreated={handleCharacterCreated} />;
 
-  // Character profile modal-style overlay
-  if (profileCharacter && activeTab === "home") {
+  // Profile overlay
+  if (profileCharacter) {
     return (
-      <View style={s.root}>
-        <CharacterProfileScreen
-          character={profileCharacter}
-          onBack={() => setProfileCharacter(null)}
-          onChat={() => {
-            setSelectedCharacter(profileCharacter);
-            setProfileCharacter(null);
-            setActiveTab("chat");
-          }}
-        />
-        <TabBar activeTab="home" onTabPress={() => {}} hideBar />
-      </View>
+      <CharacterProfileScreen
+        character={profileCharacter}
+        onBack={() => setProfileCharacter(null)}
+        onChat={() => {
+          setSelectedCharacter(profileCharacter);
+          setProfileCharacter(null);
+          setActiveTab("chat");
+        }}
+      />
     );
   }
 
   return (
     <View style={s.root}>
-      {/* Screens */}
       <View style={s.screens}>
         {activeTab === "home" && (
-          <CharacterListScreen
+          <HomeScreen
             characters={characters}
-            loading={false}
-            selectedId={selectedCharacter?.id}
             onSelectCharacter={handleSelectCharacter}
+            onOpenProfile={handleOpenProfile}
             onCreateNew={() => setShowGenerate(true)}
             plan={userPlan}
           />
         )}
+
         {activeTab === "chat" && (
           selectedCharacter ? (
-            <ChatScreen
-              character={selectedCharacter}
-            />
+            <ChatScreen character={selectedCharacter} />
           ) : (
-            <View style={s.noChatWrap}>
-              <Text style={s.noChatEmoji}>💬</Text>
-              <Text style={s.noChatText}>友達を選んで話しかけよう</Text>
-              <TouchableOpacity onPress={() => setActiveTab("home")} style={s.noChatBtn}>
-                <Text style={s.noChatBtnText}>友達を選ぶ</Text>
+            <View style={s.emptyWrap}>
+              <Text style={s.emptyEmoji}>💬</Text>
+              <Text style={s.emptyText}>友達を選んで話しかけよう</Text>
+              <TouchableOpacity onPress={() => setActiveTab("home")} style={s.emptyBtn}>
+                <Text style={s.emptyBtnText}>ホームへ</Text>
               </TouchableOpacity>
             </View>
           )
         )}
-        {activeTab === "today" && (
-          <TodayScreen onReplyToCharacter={handleReplyToCharacter} />
+
+        {activeTab === "friends" && (
+          <HomeScreen
+            characters={characters}
+            onSelectCharacter={handleSelectCharacter}
+            onOpenProfile={handleOpenProfile}
+            onCreateNew={() => setShowGenerate(true)}
+            plan={userPlan}
+          />
         )}
+
         {activeTab === "settings" && (
           <SettingsScreen onLogout={handleLogout} />
         )}
       </View>
 
-      {/* Tab bar */}
-      <TabBar activeTab={activeTab} onTabPress={setActiveTab} />
+      <BottomTabBar activeTab={activeTab} onPress={setActiveTab} />
     </View>
   );
 }
 
-function TabBar({
-  activeTab, onTabPress, hideBar,
+function BottomTabBar({
+  activeTab,
+  onPress,
 }: {
-  activeTab: Tab; onTabPress: (t: Tab) => void; hideBar?: boolean;
+  activeTab: Tab;
+  onPress: (t: Tab) => void;
 }) {
-  if (hideBar) return null;
   return (
-    <SafeAreaView edges={["bottom"]} style={s.tabBarWrap}>
-      <View style={s.tabBar}>
+    <SafeAreaView edges={["bottom"]} style={s.barSafe}>
+      <View style={s.bar}>
         {TABS.map(({ key, label, Icon }) => {
           const active = activeTab === key;
           return (
             <TouchableOpacity
               key={key}
-              style={s.tabItem}
-              onPress={() => onTabPress(key)}
+              style={s.barItem}
+              onPress={() => onPress(key)}
               activeOpacity={0.7}
             >
-              <Icon
-                size={22}
-                color={active ? COLORS.accent1 : COLORS.textSecondary}
-                strokeWidth={active ? 2.5 : 1.5}
-              />
-              <Text style={[s.tabLabel, active && s.tabLabelActive]}>{label}</Text>
+              <View style={[s.iconWrap, active && s.iconWrapActive]}>
+                <Icon
+                  size={22}
+                  color={active ? C.accent : C.textTertiary}
+                  strokeWidth={active ? 2.5 : 1.8}
+                />
+              </View>
+              <Text style={[s.barLabel, active && s.barLabelActive]}>{label}</Text>
             </TouchableOpacity>
           );
         })}
@@ -202,20 +202,76 @@ function TabBar({
 }
 
 const s = StyleSheet.create({
-  root: { flex: 1, backgroundColor: COLORS.bg },
-  loadingWrap: { flex: 1, backgroundColor: COLORS.bg, justifyContent: "center", alignItems: "center" },
-  screens: { flex: 1 },
-  tabBarWrap: { backgroundColor: COLORS.bg, borderTopWidth: 1, borderTopColor: COLORS.border },
-  tabBar: { flexDirection: "row", paddingTop: 8, paddingBottom: Platform.OS === "ios" ? 0 : 8 },
-  tabItem: { flex: 1, alignItems: "center", gap: 3, paddingVertical: 4 },
-  tabLabel: { fontSize: 10, color: COLORS.textSecondary, fontWeight: "500" },
-  tabLabelActive: { color: COLORS.accent1, fontWeight: "700" },
-  noChatWrap: { flex: 1, justifyContent: "center", alignItems: "center", gap: 12 },
-  noChatEmoji: { fontSize: 48 },
-  noChatText: { fontSize: 16, color: COLORS.textSecondary },
-  noChatBtn: {
-    marginTop: 8, backgroundColor: COLORS.text, borderRadius: 12,
-    paddingHorizontal: 24, paddingVertical: 12,
+  root: { flex: 1, backgroundColor: C.bg },
+  loadingWrap: {
+    flex: 1,
+    backgroundColor: C.bg,
+    justifyContent: "center",
+    alignItems: "center",
   },
-  noChatBtnText: { color: "#FFF", fontSize: 15, fontWeight: "600" },
+  screens: { flex: 1 },
+
+  // Tab bar
+  barSafe: {
+    backgroundColor: C.bgOverlay,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: C.border,
+  },
+  bar: {
+    flexDirection: "row",
+    height: 56,
+    paddingBottom: Platform.OS === "ios" ? 0 : 4,
+  },
+  barItem: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 3,
+    paddingTop: 6,
+  },
+  iconWrap: {
+    width: 36,
+    height: 28,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 10,
+  },
+  iconWrapActive: {
+    backgroundColor: C.accentSofter,
+  },
+  barLabel: {
+    fontFamily: FONT.regular,
+    fontSize: SIZE.label,
+    color: C.textTertiary,
+  },
+  barLabelActive: {
+    fontFamily: FONT.bold,
+    color: C.accent,
+  },
+
+  // Empty chat state
+  emptyWrap: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    gap: SP.md,
+  },
+  emptyEmoji: { fontSize: 48 },
+  emptyText: {
+    fontFamily: FONT.regular,
+    fontSize: SIZE.body,
+    color: C.textSecondary,
+  },
+  emptyBtn: {
+    marginTop: SP.sm,
+    backgroundColor: C.text,
+    borderRadius: 12,
+    paddingHorizontal: SP.lg,
+    paddingVertical: 12,
+  },
+  emptyBtnText: {
+    fontFamily: FONT.bold,
+    fontSize: SIZE.body1,
+    color: C.white,
+  },
 });
