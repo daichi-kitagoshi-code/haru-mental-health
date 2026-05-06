@@ -22,7 +22,8 @@
     "plugins": [
       "expo-secure-store",
       "expo-notifications",
-      "expo-asset"
+      "expo-asset",
+      "expo-font"
     ],
     "owner": "kitagoshi"
   }

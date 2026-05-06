@@ -21,7 +21,7 @@ interface Props {
   plan: string;
 }
 
-const PLAN_LIMITS: Record<string, number> = { free: 1, standard: 3, premium: 5 };
+const PLAN_LIMITS: Record<string, number> = { free: 2, standard: 3, premium: 5 };
 
 export default function CharacterListScreen({
   characters, loading, selectedId, onSelectCharacter, onCreateNew, plan,
