@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  Image, RefreshControl, Animated,
+  RefreshControl, Animated,
 } from "react-native";
+import CharacterAvatar from "../components/CharacterAvatar";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { C, FLAT } from "../constants/colors";
 import { FONT, SIZE, SP, RADIUS } from "../constants/typography";
@@ -61,31 +62,15 @@ function FlatCard({ children, style, shadowColor = C.ink, offset = 4, borderRadi
 
 // ── Story ring ───────────────────────────────────────────
 function StoryRing({ char, onPress }: { char: CharacterProfile; onPress: () => void }) {
-  const color = charColor(char.id);
   return (
     <TouchableOpacity style={st.wrap} onPress={onPress} activeOpacity={0.85}>
-      <View style={[st.shadowDot, { backgroundColor: color }]} />
-      <View style={[st.ring, { borderColor: color }]}>
-        {char.avatar_url
-          ? <Image source={{ uri: char.avatar_url }} style={st.img} />
-          : <View style={[st.fallback, { backgroundColor: color + "22" }]}>
-              <Text style={[st.initial, { color }]}>{char.name[0]}</Text>
-            </View>}
-      </View>
+      <CharacterAvatar uri={char.avatar_url} name={char.name} size={64} />
       <Text style={st.name} numberOfLines={1}>{char.name}</Text>
     </TouchableOpacity>
   );
 }
 const st = StyleSheet.create({
-  wrap: { alignItems: "center", marginRight: 14, width: 68 },
-  shadowDot: { position: "absolute", top: 3, left: 3, width: 60, height: 60, borderRadius: 30 },
-  ring: {
-    width: 60, height: 60, borderRadius: 30, borderWidth: 3,
-    backgroundColor: C.white, overflow: "hidden",
-  },
-  img: { width: "100%", height: "100%" },
-  fallback: { flex: 1, justifyContent: "center", alignItems: "center" },
-  initial: { fontFamily: FONT.syneBold, fontSize: SIZE.subtitle },
+  wrap: { alignItems: "center", marginRight: 12, width: 72 },
   name: { fontFamily: FONT.syneBold, fontSize: SIZE.label, color: C.ink, marginTop: 5 },
 });
 
@@ -101,11 +86,7 @@ function FeedCard({ post, char, onReply }: { post: FeedPost; char?: CharacterPro
       <FlatCard borderRadius={RADIUS.md}>
         {/* Header */}
         <View style={fc.header}>
-          <View style={[fc.av, { backgroundColor: color + "18", borderColor: C.ink }]}>
-            {char?.avatar_url
-              ? <Image source={{ uri: char.avatar_url }} style={fc.avImg} />
-              : <Text style={[fc.avText, { color }]}>{post.character_name[0]}</Text>}
-          </View>
+          <CharacterAvatar uri={char?.avatar_url} name={post.character_name} size={46} />
           <View style={{ flex: 1 }}>
             <Text style={fc.name}>{post.character_name}</Text>
             <Text style={fc.meta}>{timeAgo(post.created_at)} · {char?.occupation ?? ""}</Text>
@@ -132,9 +113,6 @@ function FeedCard({ post, char, onReply }: { post: FeedPost; char?: CharacterPro
 }
 const fc = StyleSheet.create({
   header: { flexDirection: "row", alignItems: "center", gap: 10, padding: 14, paddingBottom: 10 },
-  av: { width: 42, height: 42, borderRadius: RADIUS.sm, borderWidth: 2, justifyContent: "center", alignItems: "center", overflow: "hidden" },
-  avImg: { width: "100%", height: "100%" },
-  avText: { fontFamily: FONT.syneBold, fontSize: SIZE.subtitle },
   name: { fontFamily: FONT.syneBold, fontSize: SIZE.body1, color: C.ink },
   meta: { fontFamily: FONT.syne, fontSize: SIZE.caption, color: C.ink3 },
   badge: { backgroundColor: C.coral, borderRadius: RADIUS.pill, paddingHorizontal: 8, paddingVertical: 3 },
@@ -155,10 +133,8 @@ function FriendRow({ char, onPress, onChat }: { char: CharacterProfile; onPress:
     <TouchableOpacity onPress={onPress} activeOpacity={0.9} style={{ marginHorizontal: SP.md, marginBottom: 8 }}>
       <FlatCard style={{ flexDirection: "row", alignItems: "center", gap: 12, padding: 12, paddingRight: 14 }} borderRadius={RADIUS.md}>
         <View style={[fr.leftBar, { backgroundColor: color }]} />
-        <View style={[fr.av, { backgroundColor: color + "18", borderColor: C.ink }]}>
-          {char.avatar_url
-            ? <Image source={{ uri: char.avatar_url }} style={fr.avImg} />
-            : <Text style={[fr.avText, { color }]}>{char.name[0]}</Text>}
+        <View style={fr.avWrap}>
+          <CharacterAvatar uri={char.avatar_url} name={char.name} size={50} />
           <View style={fr.onlineDot} />
         </View>
         <View style={{ flex: 1 }}>
@@ -174,9 +150,7 @@ function FriendRow({ char, onPress, onChat }: { char: CharacterProfile; onPress:
 }
 const fr = StyleSheet.create({
   leftBar: { width: 4, height: "100%", position: "absolute", left: 0, top: 0, bottom: 0, borderTopLeftRadius: RADIUS.md, borderBottomLeftRadius: RADIUS.md },
-  av: { width: 44, height: 44, borderRadius: RADIUS.sm, borderWidth: 2, justifyContent: "center", alignItems: "center", overflow: "hidden", position: "relative", marginLeft: 6 },
-  avImg: { width: "100%", height: "100%" },
-  avText: { fontFamily: FONT.syneBold, fontSize: SIZE.subtitle },
+  avWrap: { position: "relative", marginLeft: 6 },
   onlineDot: { position: "absolute", bottom: 1, right: 1, width: 10, height: 10, borderRadius: 5, backgroundColor: C.sage, borderWidth: 1.5, borderColor: C.white },
   name: { fontFamily: FONT.syneBold, fontSize: SIZE.body1, color: C.ink },
   sub: { fontFamily: FONT.syne, fontSize: SIZE.caption, color: C.ink3, marginTop: 1 },
@@ -231,7 +205,12 @@ export default function HomeScreen({ characters, onSelectCharacter, onOpenProfil
             {characters.map(c => <StoryRing key={c.id} char={c} onPress={() => onOpenProfile(c)} />)}
             {characters.length < limit && (
               <TouchableOpacity style={st.wrap} onPress={onCreateNew} activeOpacity={0.8}>
-                <View style={[st.ring, { borderColor: C.line, borderStyle: "dashed" }]}>
+                <View style={{
+                  width: 64, height: 64, borderRadius: 32,
+                  borderWidth: 2, borderColor: C.line, borderStyle: "dashed",
+                  justifyContent: "center", alignItems: "center",
+                  backgroundColor: C.mist,
+                }}>
                   <Text style={{ fontSize: 22, color: C.ink3 }}>＋</Text>
                 </View>
                 <Text style={[st.name, { color: C.ink3 }]}>追加</Text>

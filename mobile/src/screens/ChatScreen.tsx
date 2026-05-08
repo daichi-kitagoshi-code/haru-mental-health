@@ -1,8 +1,9 @@
 import React, { useState, useRef, useCallback, useEffect } from "react";
 import {
   View, Text, TextInput, TouchableOpacity, FlatList,
-  StyleSheet, KeyboardAvoidingView, Platform, Animated, Image, Linking,
+  StyleSheet, KeyboardAvoidingView, Platform, Animated, Linking,
 } from "react-native";
+import CharacterAvatar from "../components/CharacterAvatar";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { C, FLAT } from "../constants/colors";
 import { FONT, SIZE, SP, RADIUS } from "../constants/typography";
@@ -96,12 +97,45 @@ export default function ChatScreen({ character, onBack }: Props) {
     }]);
   }, [character.id]);
 
+  // ── レート制限：最大90秒サイレントリトライ ──────────────────────────
+  // ユーザーには一切エラーを見せず、タイピングインジケーターを表示し続ける。
+  const RATE_RETRY_DELAYS_MS = [500, 1000, 2000, 3000, 5000, 5000, 5000, 8000, 10000, 10000];
+  const RATE_RETRY_MAX_MS    = 90_000; // 90秒でギブアップ
+
+  const sendWithRateRetry = async (msg: string): Promise<any> => {
+    const t0 = Date.now();
+    let attempt = 0;
+    let lastErr: unknown;
+
+    while (true) {
+      try {
+        return await api.chat.sendMessage(msg, character.id);
+      } catch (err) {
+        lastErr = err;
+
+        // rate_limit 以外は即座に再スロー
+        if (!(err instanceof ApiError && err.kind === "rate_limit")) throw err;
+
+        const elapsed = Date.now() - t0;
+        if (elapsed >= RATE_RETRY_MAX_MS) {
+          console.warn(`[ChatScreen] rate_limit: giving up after ${elapsed}ms`);
+          throw err;
+        }
+
+        const delay = RATE_RETRY_DELAYS_MS[Math.min(attempt, RATE_RETRY_DELAYS_MS.length - 1)];
+        console.log(`[ChatScreen] rate_limit → retry #${attempt + 1} in ${delay}ms (${elapsed}ms elapsed)`);
+        await new Promise(r => setTimeout(r, delay));
+        attempt++;
+      }
+    }
+  };
+
   // エラー種別 → ユーザー向けメッセージ
   const errorMessage = (err: unknown): string => {
     if (err instanceof ApiError) {
       console.error(`[ChatScreen] ApiError kind=${err.kind} status=${err.status} msg=${err.message}`);
       switch (err.kind) {
-        case "rate_limit": return "今ちょっと混んでるみたい、少ししてからもう一回送ってみて 🙏";
+        case "rate_limit": return "ちょっと通信が不安定みたい、もう一回送ってみてくれる？";
         case "timeout":    return "返事に時間がかかりすぎちゃった、もう一回送ってみて ⏳";
         case "network":    return "ネットがつながってないかも、確認してみて 📡";
         case "auth":       return "ログインが切れたかも、一度アプリを再起動してみて";
@@ -137,7 +171,7 @@ export default function ChatScreen({ character, onBack }: Props) {
     const t0 = Date.now();
 
     try {
-      const resp = await api.chat.sendMessage(msg, character.id);
+      const resp = await sendWithRateRetry(msg);
       console.log(`[ChatScreen] reply received in ${Date.now() - t0}ms, crisis_level=${resp.crisis_level}`);
 
       setMessages(prev => [...prev, {
@@ -176,13 +210,7 @@ export default function ChatScreen({ character, onBack }: Props) {
         <View style={[s.row, isUser ? s.rowRight : s.rowLeft]}>
           {!isUser && (
             <View style={s.avatarWrap}>
-              {character.avatar_url ? (
-                <Image source={{ uri: character.avatar_url }} style={s.avatarImg} />
-              ) : (
-                <View style={s.avatar}>
-                  <Text style={s.avatarInitial}>{character.name[0]}</Text>
-                </View>
-              )}
+              <CharacterAvatar uri={character.avatar_url} name={character.name} size={34} />
             </View>
           )}
 
@@ -233,13 +261,7 @@ export default function ChatScreen({ character, onBack }: Props) {
 
         <View style={s.headerCenter}>
           <View style={s.headerAvatarWrap}>
-            {character.avatar_url ? (
-              <Image source={{ uri: character.avatar_url }} style={s.headerAvatarImg} />
-            ) : (
-              <View style={s.headerAvatar}>
-                <Text style={s.headerAvatarInitial}>{character.name[0]}</Text>
-              </View>
-            )}
+            <CharacterAvatar uri={character.avatar_url} name={character.name} size={42} />
             <View style={s.onlineDot} />
           </View>
           <View>
@@ -265,13 +287,9 @@ export default function ChatScreen({ character, onBack }: Props) {
           ListFooterComponent={isLoading ? (
             <View>
               <View style={s.rowLeft}>
-                {character.avatar_url ? (
-                  <Image source={{ uri: character.avatar_url }} style={s.avatarImg} />
-                ) : (
-                  <View style={[s.avatar, { marginRight: 8 }]}>
-                    <Text style={s.avatarInitial}>{character.name[0]}</Text>
-                  </View>
-                )}
+                <View style={s.avatarWrap}>
+                  <CharacterAvatar uri={character.avatar_url} name={character.name} size={34} />
+                </View>
                 <TypingDots />
               </View>
               {slowResponse && (
@@ -401,17 +419,6 @@ const s = StyleSheet.create({
     gap: 10,
   },
   headerAvatarWrap: { position: "relative" },
-  headerAvatarImg: {
-    width: 38, height: 38, borderRadius: 19,
-    borderWidth: 2, borderColor: C.ink,
-  },
-  headerAvatar: {
-    width: 38, height: 38, borderRadius: 19,
-    backgroundColor: C.coralXL,
-    borderWidth: 2, borderColor: C.ink,
-    justifyContent: "center", alignItems: "center",
-  },
-  headerAvatarInitial: { fontFamily: FONT.syneBold, fontSize: SIZE.body1, color: C.coral },
   onlineDot: {
     position: "absolute", bottom: 1, right: 1,
     width: 10, height: 10, borderRadius: 5,
@@ -447,17 +454,6 @@ const s = StyleSheet.create({
   rowRight: { justifyContent: "flex-end" },
 
   avatarWrap: { marginRight: 8, marginBottom: BUBBLE_SHADOW },
-  avatarImg: {
-    width: 28, height: 28, borderRadius: 14,
-    borderWidth: 2, borderColor: C.ink,
-  },
-  avatar: {
-    width: 28, height: 28, borderRadius: 14,
-    backgroundColor: C.coralXL,
-    borderWidth: 2, borderColor: C.ink,
-    justifyContent: "center", alignItems: "center",
-  },
-  avatarInitial: { fontFamily: FONT.syneBold, fontSize: SIZE.label, color: C.coral },
 
   // ── Flat bubble wrappers
   userBubbleOuter: {

@@ -1,12 +1,13 @@
 import React, { useState, useRef } from "react";
 import {
   View, Text, TouchableOpacity, StyleSheet, ActivityIndicator,
-  ScrollView, Alert, Animated, Image,
+  ScrollView, Alert, Animated,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { C } from "../constants/colors";
 import { FONT, SIZE, SP, RADIUS } from "../constants/typography";
 import { api } from "../services/api";
+import CharacterAvatar from "../components/CharacterAvatar";
 
 type Gender = "male" | "female" | "other";
 type AgeGroup = "same" | "older" | "younger";
@@ -150,22 +151,11 @@ export default function CharacterGenerateScreen({
                 <View style={s.card}>
                   {/* Coral header */}
                   <View style={s.cardHeader}>
-                    {preview.avatar_url ? (
-                      <View style={s.cardAvatarOuter}>
-                        <View style={s.cardAvatarShadow} />
-                        <Image source={{ uri: preview.avatar_url }} style={s.cardAvatarImg} />
-                      </View>
-                    ) : (
-                      <View style={s.cardAvatarOuter}>
-                        <View style={s.cardAvatarShadow} />
-                        <View style={s.cardAvatarFallback}>
-                          <Text style={s.cardAvatarEmoji}>
-                            {preview.gender === "female" ? "👧"
-                              : preview.gender === "male" ? "👦" : "🧑"}
-                          </Text>
-                        </View>
-                      </View>
-                    )}
+                    <CharacterAvatar
+                      uri={preview.avatar_url}
+                      name={preview.name}
+                      size={92}
+                    />
                     <Text style={s.cardName}>{preview.name}</Text>
                     <Text style={s.cardMeta}>
                       {preview.age}歳
@@ -436,27 +426,6 @@ const s = StyleSheet.create({
     borderBottomWidth: 2, borderBottomColor: C.ink,
     paddingVertical: SP.xl, alignItems: "center", gap: SP.sm,
   },
-  cardAvatarOuter: {
-    position: "relative",
-    width: 88, height: 88,
-    marginBottom: 4, marginRight: 4,
-  },
-  cardAvatarShadow: {
-    position: "absolute",
-    top: 4, left: 4, right: -4, bottom: -4,
-    backgroundColor: C.coralD, borderRadius: 44,
-  },
-  cardAvatarImg: {
-    width: 88, height: 88, borderRadius: 44,
-    borderWidth: 3, borderColor: C.white,
-  },
-  cardAvatarFallback: {
-    width: 88, height: 88, borderRadius: 44,
-    backgroundColor: C.coralXL,
-    borderWidth: 3, borderColor: C.white,
-    justifyContent: "center", alignItems: "center",
-  },
-  cardAvatarEmoji: { fontSize: 38 },
   cardName: { fontFamily: FONT.syneBlack, fontSize: SIZE.title2, color: C.white },
   cardMeta: { fontFamily: FONT.syne, fontSize: SIZE.body2, color: "rgba(255,255,255,0.8)" },
 

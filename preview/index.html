@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>haru — SVG avatar preview</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:#F4F3F8; font-family:-apple-system,sans-serif; padding:24px 20px 48px; }
+.hdr { display:flex; align-items:center; gap:8px; margin-bottom:28px; }
+.hdr-word { font-size:26px; font-weight:900; color:#111118; letter-spacing:-1px; }
+.section { font-size:10px; letter-spacing:2px; text-transform:uppercase;
+  color:#AEAEBB; font-weight:700; margin-bottom:14px; margin-top:28px; }
+
+/* avatar */
+.av-wrap { position:relative; display:inline-block; border-radius:50%; flex-shrink:0; }
+.av-wrap > div { position:absolute; border-radius:50%; }
+.av-face { overflow:hidden; border:2px solid #111118; display:flex; align-items:center; justify-content:center; }
+
+/* story row */
+.story-row { display:flex; gap:14px; flex-wrap:wrap; align-items:flex-start; }
+.story-item { display:flex; flex-direction:column; align-items:center; gap:6px; }
+.story-name { font-size:10px; font-weight:700; color:#111118; }
+
+/* friend card */
+.card { background:#fff; border:2px solid #111118; border-radius:14px;
+  padding:12px 14px 12px 20px; display:flex; align-items:center; gap:12px;
+  position:relative; box-shadow:4px 4px 0 #111118; margin-bottom:10px; }
+.card-bar { position:absolute; left:0;top:0;bottom:0;width:4px; border-radius:14px 0 0 14px; }
+.card-av { position:relative; margin-left:2px; }
+.online-dot { position:absolute; bottom:2px; right:2px; width:10px; height:10px;
+  border-radius:50%; background:#4CAF82; border:2px solid #fff; }
+.card-info { flex:1; }
+.card-name { font-size:14px; font-weight:700; color:#111118; }
+.card-sub  { font-size:11px; color:#AEAEBB; margin-top:2px; }
+.card-btn  { background:#FF4F5E; color:#fff; border:2px solid #111118;
+  border-radius:8px; padding:5px 11px; font-size:11px; font-weight:700;
+  box-shadow:2px 2px 0 #111118; }
+
+/* profile hero */
+.hero { background:#FF4F5E; border:2px solid #111118; border-radius:18px;
+  padding:28px 20px 22px; display:flex; flex-direction:column;
+  align-items:center; gap:6px; box-shadow:4px 4px 0 #111118; }
+.hero-name { font-size:22px; font-weight:900; color:#fff; margin-top:10px; }
+.hero-meta { font-size:12px; color:rgba(255,255,255,0.82); }
+.stat-row { display:flex; gap:10px; margin-top:10px; }
+.stat-pill { background:rgba(255,255,255,0.18); border:2px solid rgba(255,255,255,0.4);
+  border-radius:8px; padding:5px 12px; font-size:11px; color:#fff; font-weight:600; }
+
+/* chat */
+.chat-wrap { border:2px solid #111118; border-radius:18px; overflow:hidden; box-shadow:4px 4px 0 #111118; }
+.chat-hdr { background:#fff; border-bottom:2px solid #111118;
+  padding:10px 16px; display:flex; align-items:center; gap:10px; }
+.chat-hname { font-size:14px; font-weight:700; color:#111118; }
+.chat-online { font-size:11px; color:#4CAF82; }
+.chat-body { background:#F4F3F8; padding:14px 12px; }
+.chat-row { display:flex; align-items:flex-end; gap:8px; }
+.chat-bubble { background:#fff; border:2px solid #111118; border-radius:16px 16px 16px 4px;
+  padding:10px 14px; font-size:13px; color:#111118; box-shadow:3px 3px 0 #111118; }
+
+/* mascot showcase */
+.mascot-row { display:flex; gap:24px; align-items:flex-end; flex-wrap:wrap; }
+.mascot-item { display:flex; flex-direction:column; align-items:center; gap:8px; }
+.mascot-label { font-size:11px; font-weight:700; color:#6B6B78; }
+</style>
+</head>
+<body>
+
+<div class="hdr"><span>✦</span><span class="hdr-word">haru</span></div>
+
+<div class="section">MASCOTS — 3キャラクター（SVG）</div>
+<div class="mascot-row" id="mascots"></div>
+
+<div class="section">FRIENDS — ストーリー</div>
+<div class="story-row" id="stories"></div>
+
+<div class="section">FRIENDS — リスト</div>
+<div id="cards"></div>
+
+<div class="section">プロフィール</div>
+<div id="profile"></div>
+
+<div class="section">チャット</div>
+<div id="chat"></div>
+
+<script>
+// ── Aura palettes (outer, mid, inner) ──────────────────────────────────────
+const AURA = [
+  ["#FFF0F2","#FFB5BE","#FF8096"],
+  ["#E8F7EF","#A8DFC4","#4CAF82"],
+  ["#E4F1FD","#99C9F5","#3D8EE8"],
+  ["#F0EEFF","#C8C2FF","#9B8FFF"],
+  ["#FFF4DC","#FFC870","#F5A623"],
+  ["#FFE8F3","#FFB3D1","#FF6B9D"],
+  ["#E0F7FA","#80DEEA","#26C6DA"],
+  ["#EDE7F6","#B39DDB","#7E57C2"],
+];
+const BAR = ["#FF4F5E","#3D8EE8","#4CAF82","#9B8FFF","#F5A623","#FF6B9D"];
+function h(name){let v=0;for(let i=0;i<name.length;i++)v=(v*31+name.charCodeAt(i))>>>0;return v;}
+function pal(name){return AURA[h(name)%AURA.length];}
+function barColor(name){return BAR[h(name)%BAR.length];}
+function mascotType(name){return h(name)%3;}  // 0=Haru 1=Ko 2=Rin
+
+// ── SVG mascots ─────────────────────────────────────────────────────────────
+let _uid=0;
+function uid(){return `g${++_uid}`;}
+
+function haruSVG(sz){
+  const id=uid();
+  return `<svg viewBox="0 0 160 160" width="${sz}" height="${sz}" fill="none">
+  <defs><linearGradient id="${id}" x1="34" y1="42" x2="126" y2="118" gradientUnits="userSpaceOnUse">
+    <stop offset="0%" stop-color="#FFB3BA"/><stop offset="100%" stop-color="#FF7B8A"/>
+  </linearGradient></defs>
+  <path d="M80 42 C52 42 34 58 34 80 C34 104 52 118 80 118 C108 118 126 104 126 80 C126 58 108 42 80 42Z" fill="url(#${id})"/>
+  <ellipse cx="52" cy="38" rx="13" ry="18" fill="#FFC5CC" transform="rotate(-20 52 38)"/>
+  <ellipse cx="52" cy="38" rx="7" ry="10" fill="#FFAAB0" transform="rotate(-20 52 38)"/>
+  <ellipse cx="108" cy="38" rx="13" ry="18" fill="#FFC5CC" transform="rotate(20 108 38)"/>
+  <ellipse cx="108" cy="38" rx="7" ry="10" fill="#FFAAB0" transform="rotate(20 108 38)"/>
+  <circle cx="66" cy="74" r="8" fill="#1A1A2E"/><circle cx="94" cy="74" r="8" fill="#1A1A2E"/>
+  <circle cx="69" cy="71" r="3" fill="white"/><circle cx="97" cy="71" r="3" fill="white"/>
+  <ellipse cx="57" cy="84" rx="9" ry="6" fill="rgba(255,143,163,0.45)"/>
+  <ellipse cx="103" cy="84" rx="9" ry="6" fill="rgba(255,143,163,0.45)"/>
+  <ellipse cx="80" cy="84" rx="4" ry="3" fill="#FF5A5F"/>
+  <path d="M68 92 Q80 104 92 92" stroke="#1A1A2E" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+</svg>`;
+}
+function koSVG(sz){
+  const id=uid();
+  return `<svg viewBox="0 0 160 160" width="${sz}" height="${sz}" fill="none">
+  <defs><linearGradient id="${id}" x1="44" y1="38" x2="116" y2="120" gradientUnits="userSpaceOnUse">
+    <stop offset="0%" stop-color="#93C5FD"/><stop offset="100%" stop-color="#4A90D9"/>
+  </linearGradient></defs>
+  <path d="M80 38 C58 38 44 56 44 78 C44 102 60 120 80 120 C100 120 116 102 116 78 C116 56 102 38 80 38Z" fill="url(#${id})"/>
+  <path d="M55 55 C48 45 38 42 36 58 C34 72 44 82 52 78" fill="#BFDBFE"/>
+  <path d="M105 55 C112 45 122 42 124 58 C126 72 116 82 108 78" fill="#BFDBFE"/>
+  <path d="M62 76 Q66 70 70 76" stroke="#1A1A2E" stroke-width="3" stroke-linecap="round" fill="none"/>
+  <path d="M90 76 Q94 70 98 76" stroke="#1A1A2E" stroke-width="3" stroke-linecap="round" fill="none"/>
+  <ellipse cx="58" cy="85" rx="8" ry="5" fill="rgba(147,197,253,0.5)"/>
+  <ellipse cx="102" cy="85" rx="8" ry="5" fill="rgba(147,197,253,0.5)"/>
+  <path d="M75 92 Q80 96 85 92" stroke="#1A1A2E" stroke-width="2" stroke-linecap="round" fill="none"/>
+  <ellipse cx="80" cy="105" rx="16" ry="10" fill="rgba(255,255,255,0.25)"/>
+</svg>`;
+}
+function rinSVG(sz){
+  const id=uid();
+  return `<svg viewBox="0 0 160 160" width="${sz}" height="${sz}" fill="none">
+  <defs><linearGradient id="${id}" x1="38" y1="46" x2="122" y2="130" gradientUnits="userSpaceOnUse">
+    <stop offset="0%" stop-color="#FFD08A"/><stop offset="100%" stop-color="#F4A832"/>
+  </linearGradient></defs>
+  <path d="M56 60 L42 30 L68 52Z" fill="#F4A832"/>
+  <path d="M56 60 L48 38 L64 54Z" fill="#FF8FA3"/>
+  <path d="M104 60 L118 30 L92 52Z" fill="#F4A832"/>
+  <path d="M104 60 L112 38 L96 54Z" fill="#FF8FA3"/>
+  <circle cx="80" cy="88" r="42" fill="url(#${id})"/>
+  <ellipse cx="80" cy="96" rx="24" ry="16" fill="rgba(255,220,150,0.5)"/>
+  <circle cx="66" cy="80" r="9" fill="#1A1A2E"/><circle cx="94" cy="80" r="9" fill="#1A1A2E"/>
+  <circle cx="70" cy="76" r="3.5" fill="white"/><circle cx="98" cy="76" r="3.5" fill="white"/>
+  <ellipse cx="55" cy="90" rx="9" ry="5.5" fill="rgba(255,143,163,0.4)"/>
+  <ellipse cx="105" cy="90" rx="9" ry="5.5" fill="rgba(255,143,163,0.4)"/>
+  <ellipse cx="80" cy="90" rx="4" ry="3" fill="#E07820"/>
+  <path d="M68 98 Q80 108 92 98" stroke="#1A1A2E" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+  <path d="M122 110 C140 100 145 115 135 125 C125 135 108 128 110 118 C112 112 118 108 122 110Z" fill="#F4A832"/>
+</svg>`;
+}
+
+const MASCOTS = [haruSVG, koSVG, rinSVG];
+const MASCOT_NAMES = ["Haru（はる）","Ko（こ）","Rin（りん）"];
+const MASCOT_DESC = ["ピンク・ペタル耳","スカイブルー・垂れ耳","ゴールド・狐耳・しっぽ"];
+
+function makeSVG(name, sz){return MASCOTS[mascotType(name)](sz);}
+
+// ── Avatar with aura ring ────────────────────────────────────────────────────
+function makeAvatar(name, outerSz) {
+  const [outer,mid,inner] = pal(name);
+  const midI = outerSz*0.07, innerI = outerSz*0.14;
+  const faceSz = outerSz - innerI*2;
+  const wrap = document.createElement('div');
+  wrap.className = 'av-wrap';
+  wrap.style.cssText = `width:${outerSz}px;height:${outerSz}px;`;
+
+  // outer glow
+  const og = document.createElement('div');
+  og.style.cssText = `inset:0;background:${outer};`;
+  wrap.appendChild(og);
+  // mid ring
+  const mr = document.createElement('div');
+  mr.style.cssText = `top:${midI}px;left:${midI}px;right:${midI}px;bottom:${midI}px;background:${mid};`;
+  wrap.appendChild(mr);
+  // inner accent
+  const ia = document.createElement('div');
+  ia.style.cssText = `top:${innerI}px;left:${innerI}px;right:${innerI}px;bottom:${innerI}px;background:${inner};opacity:0.35;`;
+  wrap.appendChild(ia);
+  // face
+  const face = document.createElement('div');
+  face.className = 'av-face';
+  face.style.cssText = `position:absolute;top:${innerI}px;left:${innerI}px;width:${faceSz}px;height:${faceSz}px;border-radius:${faceSz/2}px;background:${mid};`;
+  face.innerHTML = makeSVG(name, faceSz);
+  wrap.appendChild(face);
+  return wrap;
+}
+
+// ── Mascot showcase ──────────────────────────────────────────────────────────
+const MR = document.getElementById('mascots');
+[0,1,2].forEach(i=>{
+  const item = document.createElement('div');
+  item.className = 'mascot-item';
+  // big standalone
+  const bigWrap = document.createElement('div');
+  bigWrap.style.cssText = 'background:#fff;border:2px solid #111118;border-radius:16px;padding:16px;box-shadow:4px 4px 0 #111118;';
+  bigWrap.innerHTML = MASCOTS[i](96);
+  item.appendChild(bigWrap);
+  const lbl = document.createElement('div');
+  lbl.className = 'mascot-label';
+  lbl.innerHTML = `<strong>${MASCOT_NAMES[i]}</strong><br>${MASCOT_DESC[i]}`;
+  lbl.style.textAlign='center';
+  item.appendChild(lbl);
+  MR.appendChild(item);
+});
+
+// ── Characters (names chosen to hit all 3 types) ─────────────────────────────
+const chars=[
+  {name:"陽菜",age:23,occ:"カフェスタッフ"},
+  {name:"蓮",  age:26,occ:"ITエンジニア"},
+  {name:"さくら",age:24,occ:"保育士"},
+  {name:"湊",  age:25,occ:"フリーデザイナー"},
+  {name:"凛",  age:22,occ:"大学在学中"},
+  {name:"颯",  age:27,occ:"営業職"},
+];
+
+// Stories
+const SR=document.getElementById('stories');
+chars.forEach(c=>{
+  const item=document.createElement('div');item.className='story-item';
+  item.appendChild(makeAvatar(c.name,64));
+  const lbl=document.createElement('div');lbl.className='story-name';lbl.textContent=c.name;
+  item.appendChild(lbl);SR.appendChild(item);
+});
+
+// Cards
+const CR=document.getElementById('cards');
+chars.slice(0,3).forEach(c=>{
+  const card=document.createElement('div');card.className='card';
+  const b=document.createElement('div');b.className='card-bar';b.style.background=barColor(c.name);card.appendChild(b);
+  const aw=document.createElement('div');aw.className='card-av';
+  aw.appendChild(makeAvatar(c.name,50));
+  const dot=document.createElement('div');dot.className='online-dot';aw.appendChild(dot);
+  card.appendChild(aw);
+  const info=document.createElement('div');info.className='card-info';
+  info.innerHTML=`<div class="card-name">${c.name}</div><div class="card-sub">${c.occ}</div>`;
+  card.appendChild(info);
+  const btn=document.createElement('div');btn.className='card-btn';btn.textContent='チャット';
+  card.appendChild(btn);CR.appendChild(card);
+});
+
+// Profile
+const PR=document.getElementById('profile');
+const hero=document.createElement('div');hero.className='hero';
+hero.appendChild(makeAvatar('陽菜',110));
+hero.innerHTML+=`<div class="hero-name">陽菜</div><div class="hero-meta">23歳 · カフェスタッフ · 大阪</div>
+<div class="stat-row"><div class="stat-pill">💭 共感力が高い</div><div class="stat-pill">🗣 やわらかい話し方</div></div>`;
+PR.appendChild(hero);
+
+// Chat
+const CH=document.getElementById('chat');
+const cw=document.createElement('div');cw.className='chat-wrap';
+const chdr=document.createElement('div');chdr.className='chat-hdr';
+const hav=document.createElement('div');hav.style.position='relative';
+hav.appendChild(makeAvatar('陽菜',42));
+const hdot=document.createElement('div');hdot.className='online-dot';hav.appendChild(hdot);
+chdr.appendChild(hav);
+chdr.innerHTML+=`<div><div class="chat-hname">陽菜</div><div class="chat-online">オンライン</div></div>`;
+cw.appendChild(chdr);
+const cb=document.createElement('div');cb.className='chat-body';
+const crow=document.createElement('div');crow.className='chat-row';
+crow.appendChild(makeAvatar('陽菜',34));
+const bubble=document.createElement('div');bubble.className='chat-bubble';
+bubble.textContent='陽菜だよ。何でも話してね 😊';
+crow.appendChild(bubble);cb.appendChild(crow);cw.appendChild(cb);CH.appendChild(cw);
+</script>
+</body>
+</html>

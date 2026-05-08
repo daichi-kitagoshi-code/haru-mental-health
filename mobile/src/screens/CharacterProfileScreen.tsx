@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from "react";
 import {
   View, Text, TouchableOpacity, StyleSheet, ScrollView,
-  ActivityIndicator, Image,
+  ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { C, FLAT } from "../constants/colors";
 import { FONT, SIZE, SP, RADIUS } from "../constants/typography";
 import { ChevronLeft, MessageCircle } from "lucide-react-native";
 import { api } from "../services/api";
+import CharacterAvatar from "../components/CharacterAvatar";
 
 export interface CharacterProfile {
   id: string;
@@ -131,19 +132,13 @@ export default function CharacterProfileScreen({ character, onBack, onChat }: Pr
 
         {/* Hero */}
         <View style={s.heroWrap}>
-          {/* Avatar with flat border ring */}
-          <View style={s.avatarRingOuter}>
-            <View style={s.avatarRingShadow} />
-            <View style={s.avatarRing}>
-              {character.avatar_url ? (
-                <Image source={{ uri: character.avatar_url }} style={s.avatarImg} />
-              ) : (
-                <View style={s.avatarFallback}>
-                  <Text style={s.avatarInitial}>{character.name[0]}</Text>
-                </View>
-              )}
-            </View>
-          </View>
+          {/* Multi-color aura avatar */}
+          <CharacterAvatar
+            uri={character.avatar_url}
+            name={character.name}
+            size={110}
+            style={{ marginBottom: 12 }}
+          />
           <Text style={s.heroName}>{character.name}</Text>
           <Text style={s.heroMeta}>
             {character.age}歳
@@ -310,31 +305,6 @@ const s = StyleSheet.create({
   },
 
   heroWrap: { alignItems: "center" },
-  avatarRingOuter: {
-    position: "relative",
-    marginBottom: 12,
-    width: 104, height: 104,
-    marginRight: 4, // visual offset for shadow
-  },
-  avatarRingShadow: {
-    position: "absolute",
-    top: 4, left: 4, right: -4, bottom: -4,
-    backgroundColor: C.coralD,
-    borderRadius: 52,
-  },
-  avatarRing: {
-    width: 104, height: 104, borderRadius: 52,
-    borderWidth: 3, borderColor: C.white,
-    overflow: "hidden",
-    backgroundColor: C.coralXL,
-  },
-  avatarImg: { width: 98, height: 98, borderRadius: 49 },
-  avatarFallback: {
-    width: 98, height: 98, borderRadius: 49,
-    backgroundColor: C.coralXL,
-    justifyContent: "center", alignItems: "center",
-  },
-  avatarInitial: { fontFamily: FONT.syneBlack, fontSize: SIZE.largeTitle, color: C.coral },
   heroName: {
     fontFamily: FONT.syneBlack, fontSize: SIZE.title2,
     color: C.white, marginBottom: 4,

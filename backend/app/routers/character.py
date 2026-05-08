@@ -1,5 +1,4 @@
 import random
-import hashlib
 import urllib.parse
 import anthropic
 from fastapi import APIRouter, Header, HTTPException
@@ -146,17 +145,50 @@ def get_age_range(age_group: str, user_age: int = 25) -> tuple[int, int]:
 
 
 def generate_avatar_url(char: dict) -> str:
-    gender_en = "woman" if char["gender"] == "female" else "man" if char["gender"] == "male" else "person"
-    age = char["age"]
-    occupation = char.get("occupation", "")
-    seed = int(hashlib.md5(char["name"].encode()).hexdigest()[:8], 16) % 100000
-    prompt = (
-        f"portrait photo, japanese {gender_en}, {age} years old, {occupation}, "
-        "friendly natural smile, soft natural lighting, photorealistic, high quality, "
-        "face closeup, warm background, casual style"
+    """
+    DiceBear 'adventurer' — cute illustrated anime-style avatars.
+    Background palette is mapped from personality keyword for a calming multi-color look.
+    """
+    name = char["name"]
+    personality = char.get("personality", "")
+    gender = char.get("gender", "")
+
+    # Personality keyword → soft calming background hex triad (no #)
+    PERSONALITY_PALETTES: list[tuple[str, list[str]]] = [
+        ("ポジティブ",  ["ffd5dc", "ffdfbf", "ffe4e8"]),   # warm peach-coral
+        ("聞き上手",    ["c3e6cb", "b8e8d0", "dcedc8"]),   # soft sage-mint
+        ("ドジ",        ["fff3cd", "ffeaa8", "ffe0b2"]),   # warm gold-yellow
+        ("さっぱり",    ["b6e3f4", "bbdefb", "e0f7fa"]),   # sky-aqua
+        ("面倒見",      ["d4b8e0", "e1bee7", "ede7f6"]),   # lavender-lilac
+        ("マイペース",  ["c8e6c9", "dcedc8", "b2dfdb"]),   # mint-teal
+        ("心配性",      ["fce4ec", "f8bbd0", "ffd5dc"]),   # blush-pink
+        ("毒舌",        ["b2dfdb", "b2ebf2", "e0f2f1"]),   # cool teal
+        ("冷静",        ["c5cae9", "d1d4f9", "dfe3fc"]),   # indigo-periwinkle
+        ("天然",        ["fff9c4", "ffe082", "fffde7"]),   # soft lemon
+    ]
+
+    # Fallback palette differs by gender so every character feels distinct
+    if gender == "female":
+        bg_colors = "fce4ec,ffd5dc,f8bbd0"
+    elif gender == "male":
+        bg_colors = "e3f2fd,bbdefb,c5cae9"
+    else:
+        bg_colors = "e8f5e9,c8e6c9,dcedc8"
+
+    for keyword, palette in PERSONALITY_PALETTES:
+        if keyword in personality:
+            bg_colors = ",".join(palette)
+            break
+
+    # 'adventurer' = cute anime-illustrated face with accessories; consistent seed per name
+    seed_str = urllib.parse.quote(name)
+    return (
+        f"https://api.dicebear.com/9.x/adventurer/png"
+        f"?seed={seed_str}"
+        f"&size=256"
+        f"&backgroundColor={bg_colors}"
+        f"&backgroundType=gradientLinear"
     )
-    encoded = urllib.parse.quote(prompt)
-    return f"https://image.pollinations.ai/prompt/{encoded}?width=512&height=512&nologo=true&seed={seed}&model=flux-realism"
 
 
 async def generate_narrative_with_claude(char: dict) -> str:

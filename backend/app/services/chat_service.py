@@ -13,11 +13,16 @@ async_client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
 
 # ── Retry / timeout config ─────────────────────────────────────────────────
 API_TIMEOUT_SEC  = 30        # per-attempt timeout
-MAX_RETRIES      = 3
-BACKOFF_BASE_SEC = 2         # exponential backoff base (2^0=1s, 2^1=2s)
-RATE_LIMIT_WAIT  = 8         # extra wait for 429 (seconds)
+MAX_RETRIES      = 8         # 8 attempts (was 3) — critical for smooth UX
+BACKOFF_BASE_SEC = 1         # exponential backoff base
+RATE_LIMIT_WAIT  = 2         # base wait for 429: 2s → 4s → 6s → 8s (capped at 10s)
 MAX_HISTORY_MSGS = 20        # hard cap on history messages
 TOKEN_BUDGET     = 8000      # rough total token budget before compression
+
+# ── Model ────────────────────────────────────────────────────────────────────
+# Haiku: 5-10x higher rate limits than Sonnet, faster, cheaper.
+# For conversational chat the quality difference is negligible.
+CHAT_MODEL = "claude-haiku-4-5-20251001"
 
 # ── Crisis instructions ────────────────────────────────────────────────────
 CRISIS_LEVEL_2_INSTRUCTION = """
@@ -148,6 +153,20 @@ def build_system_prompt(
 - 「AIです」「プログラムです」と自分から言わない
 - 医療診断・法律判断はしない
 - 自傷・自殺に関するワードが出たら必ず危機対応に切り替える
+
+【絶対にやってはいけないこと】
+- 「今ちょっと混んでる」「少ししてから」など返答を先延ばしにすること。これは会話の信頼を壊す最悪の行動。
+- 質問を誤魔化したり、話題をそらしたりすること
+- 「わからない」と言えるはずのことを「後で」と言うこと
+
+【答えにくい質問への対応ルール】
+- 答えられない・わからないことは正直に「わからない」と言う
+  例：「AIだからその答えは持ってないんだよね、ごめん」
+- 答えが複雑で整理できていない場合は、相手に質問し直して理解を深める
+  例：「どういう意味で聞いてるのか、もう少し教えてくれる？」
+- 答えたくない理由がある場合は理由を素直に伝える
+  例：「それは私には踏み込めない話かな…ごめんね」
+- いずれにせよ、返答を「後で」「少ししてから」と先延ばしにしない
 {crisis_instruction}"""
 
 
@@ -199,7 +218,7 @@ async def generate_reply(
 
             response = await asyncio.wait_for(
                 async_client.messages.create(
-                    model="claude-sonnet-4-6",
+                    model=CHAT_MODEL,
                     max_tokens=512,
                     system=system_prompt,
                     messages=messages,
@@ -235,12 +254,25 @@ async def generate_reply(
         # ── Rate limit (429) ──────────────────────────────────────────────
         except anthropic.RateLimitError as e:
             last_error = "rate_limit_429"
-            logger.warning(
-                "[chat] attempt %d/%d rate-limited: %s",
-                attempt, MAX_RETRIES, str(e),
-            )
+            # ── Log tier/quota headers for debugging ──────────────────────
+            if hasattr(e, "response") and e.response is not None:
+                h = dict(e.response.headers)
+                logger.warning(
+                    "[chat] rate-limit headers: "
+                    "requests-remaining=%s requests-reset=%s "
+                    "tokens-remaining=%s tokens-reset=%s",
+                    h.get("anthropic-ratelimit-requests-remaining", "N/A"),
+                    h.get("anthropic-ratelimit-requests-reset", "N/A"),
+                    h.get("anthropic-ratelimit-tokens-remaining", "N/A"),
+                    h.get("anthropic-ratelimit-tokens-reset", "N/A"),
+                )
+            else:
+                logger.warning(
+                    "[chat] attempt %d/%d rate-limited (no headers): %s",
+                    attempt, MAX_RETRIES, str(e),
+                )
             if attempt < MAX_RETRIES:
-                wait = RATE_LIMIT_WAIT * attempt   # 8s → 16s
+                wait = min(RATE_LIMIT_WAIT * attempt, 10)  # 2s→4s→6s→8s→10s (cap)
                 logger.info("[chat] retrying in %.1fs (rate limit backoff)", wait)
                 await asyncio.sleep(wait)
 
