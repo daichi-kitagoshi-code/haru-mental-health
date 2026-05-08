@@ -4,9 +4,8 @@ import {
   StyleSheet, KeyboardAvoidingView, Platform, Animated, Image, Linking,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { LinearGradient } from "expo-linear-gradient";
-import { C, GRAD } from "../constants/colors";
-import { FONT, SIZE, SP, RADIUS, SHADOW } from "../constants/typography";
+import { C, FLAT } from "../constants/colors";
+import { FONT, SIZE, SP, RADIUS } from "../constants/typography";
 import { api } from "../services/api";
 import { ChevronLeft } from "lucide-react-native";
 
@@ -46,32 +45,22 @@ function fmtTime(ts: number) {
   return `${d.getHours()}:${String(d.getMinutes()).padStart(2, "0")}`;
 }
 
+// ── Flat typing indicator ──────────────────────────────────────────────────
 function TypingDots() {
-  const scales = [
-    useRef(new Animated.Value(1)).current,
-    useRef(new Animated.Value(1)).current,
-    useRef(new Animated.Value(1)).current,
-  ];
   const opacities = [
-    useRef(new Animated.Value(0.4)).current,
-    useRef(new Animated.Value(0.4)).current,
-    useRef(new Animated.Value(0.4)).current,
+    useRef(new Animated.Value(0.3)).current,
+    useRef(new Animated.Value(0.3)).current,
+    useRef(new Animated.Value(0.3)).current,
   ];
 
   useEffect(() => {
-    const anims = scales.map((s, i) =>
+    const anims = opacities.map((o, i) =>
       Animated.loop(
         Animated.sequence([
-          Animated.delay(i * 160),
-          Animated.parallel([
-            Animated.timing(s, { toValue: 1.4, duration: 220, useNativeDriver: true }),
-            Animated.timing(opacities[i], { toValue: 1, duration: 220, useNativeDriver: true }),
-          ]),
-          Animated.parallel([
-            Animated.timing(s, { toValue: 1, duration: 220, useNativeDriver: true }),
-            Animated.timing(opacities[i], { toValue: 0.4, duration: 220, useNativeDriver: true }),
-          ]),
-          Animated.delay(320),
+          Animated.delay(i * 180),
+          Animated.timing(o, { toValue: 1, duration: 240, useNativeDriver: true }),
+          Animated.timing(o, { toValue: 0.3, duration: 240, useNativeDriver: true }),
+          Animated.delay(360),
         ])
       )
     );
@@ -81,11 +70,8 @@ function TypingDots() {
 
   return (
     <View style={ty.wrap}>
-      {scales.map((s, i) => (
-        <Animated.View
-          key={i}
-          style={[ty.dot, { transform: [{ scale: s }], opacity: opacities[i] }]}
-        />
+      {opacities.map((o, i) => (
+        <Animated.View key={i} style={[ty.dot, { opacity: o }]} />
       ))}
     </View>
   );
@@ -147,31 +133,39 @@ export default function ChatScreen({ character, onBack }: Props) {
         )}
         <View style={[s.row, isUser ? s.rowRight : s.rowLeft]}>
           {!isUser && (
-            character.avatar_url ? (
-              <Image source={{ uri: character.avatar_url }} style={s.avatarImg} />
-            ) : (
-              <View style={s.avatar}>
-                <Text style={s.avatarInitial}>{character.name[0]}</Text>
-              </View>
-            )
+            <View style={s.avatarWrap}>
+              {character.avatar_url ? (
+                <Image source={{ uri: character.avatar_url }} style={s.avatarImg} />
+              ) : (
+                <View style={s.avatar}>
+                  <Text style={s.avatarInitial}>{character.name[0]}</Text>
+                </View>
+              )}
+            </View>
           )}
-          <View style={[s.bubble, isUser ? s.userBubble : s.aiBubble]}>
-            <Text style={[s.bubbleText, isUser ? s.userText : s.aiText]}>
-              {item.content}
-            </Text>
-            {item.crisisResources && item.crisisResources.length > 0 && (
-              <View style={s.crisis}>
-                <Text style={s.crisisTitle}>もし辛くなったら</Text>
-                {item.crisisResources.map((r, i) => (
-                  <TouchableOpacity
-                    key={i}
-                    onPress={() => Linking.openURL(`tel:${r.split(/[（(]/)[0].trim()}`)}
-                  >
-                    <Text style={s.crisisLink}>{r}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            )}
+
+          {/* Flat bubble */}
+          <View style={isUser ? s.userBubbleOuter : s.aiBubbleOuter}>
+            {/* flat shadow layer */}
+            <View style={isUser ? s.userShadow : s.aiShadow} />
+            <View style={[s.bubble, isUser ? s.userBubble : s.aiBubble]}>
+              <Text style={[s.bubbleText, isUser ? s.userText : s.aiText]}>
+                {item.content}
+              </Text>
+              {item.crisisResources && item.crisisResources.length > 0 && (
+                <View style={s.crisis}>
+                  <Text style={s.crisisTitle}>もし辛くなったら</Text>
+                  {item.crisisResources.map((r, i) => (
+                    <TouchableOpacity
+                      key={i}
+                      onPress={() => Linking.openURL(`tel:${r.split(/[（(]/)[0].trim()}`)}
+                    >
+                      <Text style={s.crisisLink}>{r}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+            </View>
           </View>
         </View>
       </>
@@ -182,18 +176,21 @@ export default function ChatScreen({ character, onBack }: Props) {
 
   return (
     <SafeAreaView style={s.container} edges={["top"]}>
-      {/* Header */}
+      {/* ── Header ─────────────────────────────────────────────────────── */}
       <View style={s.header}>
         <TouchableOpacity
           onPress={onBack}
           style={s.backBtn}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
-          <ChevronLeft size={20} color={C.text} strokeWidth={2} />
+          <View style={s.backShadow} />
+          <View style={s.backInner}>
+            <ChevronLeft size={18} color={C.ink} strokeWidth={2.5} />
+          </View>
         </TouchableOpacity>
 
         <View style={s.headerCenter}>
-          <View style={s.avatarWrap}>
+          <View style={s.headerAvatarWrap}>
             {character.avatar_url ? (
               <Image source={{ uri: character.avatar_url }} style={s.headerAvatarImg} />
             ) : (
@@ -228,7 +225,7 @@ export default function ChatScreen({ character, onBack }: Props) {
               {character.avatar_url ? (
                 <Image source={{ uri: character.avatar_url }} style={s.avatarImg} />
               ) : (
-                <View style={s.avatar}>
+                <View style={[s.avatar, { marginRight: 8 }]}>
                   <Text style={s.avatarInitial}>{character.name[0]}</Text>
                 </View>
               )}
@@ -245,38 +242,42 @@ export default function ChatScreen({ character, onBack }: Props) {
                 key={q}
                 style={s.quickChip}
                 onPress={() => sendMessage(q)}
+                activeOpacity={0.75}
               >
-                <Text style={s.quickText}>{q}</Text>
+                <View style={s.quickShadow} />
+                <View style={s.quickInner}>
+                  <Text style={s.quickText}>{q}</Text>
+                </View>
               </TouchableOpacity>
             ))}
           </View>
         )}
 
-        {/* Input bar */}
+        {/* ── Input bar ───────────────────────────────────────────────── */}
         <View style={s.inputBar}>
-          <TextInput
-            style={s.input}
-            value={inputText}
-            onChangeText={setInputText}
-            placeholder="メッセージ"
-            placeholderTextColor={C.textTertiary}
-            multiline
-            maxLength={2000}
-            returnKeyType="default"
-          />
+          <View style={s.inputWrap}>
+            <TextInput
+              style={s.input}
+              value={inputText}
+              onChangeText={setInputText}
+              placeholder="メッセージを送る"
+              placeholderTextColor={C.ink3}
+              multiline
+              maxLength={2000}
+              returnKeyType="default"
+            />
+          </View>
+
           <TouchableOpacity
             onPress={() => sendMessage()}
             disabled={!inputText.trim() || isLoading}
-            activeOpacity={0.85}
+            activeOpacity={0.8}
+            style={s.sendBtnWrap}
           >
-            <LinearGradient
-              colors={GRAD}
-              style={[s.sendBtn, (!inputText.trim() || isLoading) && s.sendDisabled]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-            >
+            <View style={[s.sendShadow, (!inputText.trim() || isLoading) && s.sendDisabledShadow]} />
+            <View style={[s.sendBtn, (!inputText.trim() || isLoading) && s.sendDisabled]}>
               <Text style={s.sendArrow}>↑</Text>
-            </LinearGradient>
+            </View>
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
@@ -284,44 +285,63 @@ export default function ChatScreen({ character, onBack }: Props) {
   );
 }
 
+// ── Typing dots styles ─────────────────────────────────────────────────────
 const ty = StyleSheet.create({
   wrap: {
     flexDirection: "row",
     gap: 5,
-    backgroundColor: C.bgSecondary,
-    borderRadius: 18,
+    backgroundColor: C.white,
+    borderWidth: 2,
+    borderColor: C.ink,
+    borderRadius: 16,
     borderBottomLeftRadius: 4,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
     marginVertical: 2,
   },
   dot: {
     width: 7,
     height: 7,
     borderRadius: 3.5,
-    backgroundColor: C.textSecondary,
+    backgroundColor: C.ink2,
   },
 });
 
-const s = StyleSheet.create({
-  container: { flex: 1, backgroundColor: C.bg },
+const BUBBLE_SHADOW = 3;
 
-  // Header
+const s = StyleSheet.create({
+  container: { flex: 1, backgroundColor: C.mist },
+
+  // ── Header
   header: {
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: SP.md,
     paddingVertical: 10,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: C.border,
-    backgroundColor: C.bg,
+    borderBottomWidth: 2,
+    borderBottomColor: C.ink,
+    backgroundColor: C.white,
     gap: SP.sm,
   },
-  backBtn: {
+  backBtn: { position: "relative", width: 36, height: 36, marginBottom: BUBBLE_SHADOW },
+  backShadow: {
+    position: "absolute",
+    top: BUBBLE_SHADOW,
+    left: BUBBLE_SHADOW,
+    right: -BUBBLE_SHADOW,
+    bottom: -BUBBLE_SHADOW,
+    backgroundColor: C.ink,
+    borderRadius: 10,
+  },
+  backInner: {
+    position: "absolute",
+    inset: 0,
     width: 36,
     height: 36,
-    borderRadius: 18,
-    backgroundColor: C.bgSecondary,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: C.ink,
+    backgroundColor: C.white,
     justifyContent: "center",
     alignItems: "center",
   },
@@ -331,195 +351,173 @@ const s = StyleSheet.create({
     alignItems: "center",
     gap: 10,
   },
-  avatarWrap: { position: "relative" },
+  headerAvatarWrap: { position: "relative" },
   headerAvatarImg: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+    width: 38, height: 38, borderRadius: 19,
+    borderWidth: 2, borderColor: C.ink,
   },
   headerAvatar: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: C.accentSoft,
-    justifyContent: "center",
-    alignItems: "center",
+    width: 38, height: 38, borderRadius: 19,
+    backgroundColor: C.coralXL,
+    borderWidth: 2, borderColor: C.ink,
+    justifyContent: "center", alignItems: "center",
   },
-  headerAvatarInitial: {
-    fontFamily: FONT.bold,
-    fontSize: SIZE.body1,
-    color: C.accent,
-  },
+  headerAvatarInitial: { fontFamily: FONT.syneBold, fontSize: SIZE.body1, color: C.coral },
   onlineDot: {
-    position: "absolute",
-    bottom: 1,
-    right: 1,
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: C.online,
-    borderWidth: 1.5,
-    borderColor: C.bg,
+    position: "absolute", bottom: 1, right: 1,
+    width: 10, height: 10, borderRadius: 5,
+    backgroundColor: C.sage, borderWidth: 1.5, borderColor: C.white,
   },
-  headerName: {
-    fontFamily: FONT.bold,
-    fontSize: SIZE.body1,
-    color: C.text,
-  },
-  headerOnline: {
-    fontFamily: FONT.regular,
-    fontSize: SIZE.caption,
-    color: C.online,
-    marginTop: 1,
-  },
+  headerName: { fontFamily: FONT.syneBold, fontSize: SIZE.body1, color: C.ink },
+  headerOnline: { fontFamily: FONT.syne, fontSize: SIZE.caption, color: C.sage, marginTop: 1 },
 
-  // List
-  list: {
-    paddingHorizontal: SP.md,
-    paddingTop: SP.md,
-    paddingBottom: SP.sm,
-  },
+  // ── List
+  list: { paddingHorizontal: SP.md, paddingTop: SP.md, paddingBottom: SP.sm },
   ts: {
     textAlign: "center",
-    fontFamily: FONT.regular,
+    fontFamily: FONT.sans,
     fontSize: SIZE.label,
-    color: C.textTertiary,
+    color: C.ink3,
     marginVertical: 12,
   },
   row: {
     flexDirection: "row",
-    marginVertical: 2,
+    marginVertical: 4,
     alignItems: "flex-end",
   },
   rowLeft: { justifyContent: "flex-start" },
   rowRight: { justifyContent: "flex-end" },
+
+  avatarWrap: { marginRight: 8, marginBottom: BUBBLE_SHADOW },
   avatarImg: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    marginRight: 6,
-    marginBottom: 2,
+    width: 28, height: 28, borderRadius: 14,
+    borderWidth: 2, borderColor: C.ink,
   },
   avatar: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: C.accentSoft,
-    justifyContent: "center",
-    alignItems: "center",
-    marginRight: 6,
-    marginBottom: 2,
+    width: 28, height: 28, borderRadius: 14,
+    backgroundColor: C.coralXL,
+    borderWidth: 2, borderColor: C.ink,
+    justifyContent: "center", alignItems: "center",
   },
-  avatarInitial: {
-    fontFamily: FONT.bold,
-    fontSize: SIZE.label,
-    color: C.accent,
-  },
+  avatarInitial: { fontFamily: FONT.syneBold, fontSize: SIZE.label, color: C.coral },
 
-  // Bubbles
-  bubble: {
+  // ── Flat bubble wrappers
+  userBubbleOuter: {
+    position: "relative",
+    marginBottom: BUBBLE_SHADOW,
+    marginRight: BUBBLE_SHADOW,
     maxWidth: "78%",
+  },
+  aiBubbleOuter: {
+    position: "relative",
+    marginBottom: BUBBLE_SHADOW,
+    marginLeft: BUBBLE_SHADOW,
+    maxWidth: "78%",
+  },
+  userShadow: {
+    position: "absolute",
+    top: BUBBLE_SHADOW,
+    left: BUBBLE_SHADOW,
+    right: -BUBBLE_SHADOW,
+    bottom: -BUBBLE_SHADOW,
+    backgroundColor: C.coralD,
+    borderRadius: 16,
+    borderBottomRightRadius: 4,
+  },
+  aiShadow: {
+    position: "absolute",
+    top: BUBBLE_SHADOW,
+    left: BUBBLE_SHADOW,
+    right: -BUBBLE_SHADOW,
+    bottom: -BUBBLE_SHADOW,
+    backgroundColor: C.ink,
+    borderRadius: 16,
+    borderBottomLeftRadius: 4,
+  },
+  bubble: {
     paddingHorizontal: 14,
     paddingVertical: 10,
+    borderWidth: 2,
   },
   userBubble: {
-    backgroundColor: C.black,
-    borderRadius: 18,
+    backgroundColor: C.coral,
+    borderColor: C.coralD,
+    borderRadius: 16,
     borderBottomRightRadius: 4,
   },
   aiBubble: {
-    backgroundColor: C.bgSecondary,
-    borderRadius: 4,
-    borderTopRightRadius: 18,
-    borderBottomLeftRadius: 18,
-    borderBottomRightRadius: 18,
+    backgroundColor: C.white,
+    borderColor: C.ink,
+    borderRadius: 16,
+    borderBottomLeftRadius: 4,
   },
-  bubbleText: {
-    fontFamily: FONT.regular,
-    fontSize: SIZE.body,
-    lineHeight: SIZE.body * 1.6,
-  },
+  bubbleText: { fontFamily: FONT.regular, fontSize: SIZE.body, lineHeight: SIZE.body * 1.6 },
   userText: { color: C.white },
-  aiText: { color: C.text },
+  aiText: { color: C.ink },
 
   // Crisis
   crisis: {
-    marginTop: 8,
-    paddingTop: 8,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: C.border,
+    marginTop: 8, paddingTop: 8,
+    borderTopWidth: 1, borderTopColor: C.line,
   },
-  crisisTitle: {
-    fontFamily: FONT.medium,
-    fontSize: SIZE.caption,
-    color: C.textSecondary,
-    marginBottom: 4,
-  },
-  crisisLink: {
-    fontFamily: FONT.regular,
-    fontSize: SIZE.small,
-    color: C.accent,
-  },
+  crisisTitle: { fontFamily: FONT.medium, fontSize: SIZE.caption, color: C.ink2, marginBottom: 4 },
+  crisisLink: { fontFamily: FONT.regular, fontSize: SIZE.small, color: C.coral },
 
-  // Quick replies
+  // ── Quick replies
   quickWrap: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: SP.xs,
-    paddingHorizontal: SP.md,
-    paddingBottom: SP.sm,
+    flexDirection: "row", flexWrap: "wrap", gap: 6,
+    paddingHorizontal: SP.md, paddingBottom: SP.sm,
   },
-  quickChip: {
-    backgroundColor: C.bg,
-    borderWidth: 1,
-    borderColor: C.border,
-    borderRadius: RADIUS.pill,
-    paddingHorizontal: 14,
-    paddingVertical: 7,
+  quickChip: { position: "relative", marginBottom: BUBBLE_SHADOW, marginRight: BUBBLE_SHADOW },
+  quickShadow: {
+    position: "absolute",
+    top: BUBBLE_SHADOW, left: BUBBLE_SHADOW,
+    right: -BUBBLE_SHADOW, bottom: -BUBBLE_SHADOW,
+    backgroundColor: C.ink, borderRadius: RADIUS.pill,
   },
-  quickText: {
-    fontFamily: FONT.regular,
-    fontSize: SIZE.small,
-    color: C.text,
+  quickInner: {
+    borderWidth: 2, borderColor: C.ink, borderRadius: RADIUS.pill,
+    paddingHorizontal: 14, paddingVertical: 7,
+    backgroundColor: C.white,
   },
+  quickText: { fontFamily: FONT.syne, fontSize: SIZE.small, color: C.ink },
 
-  // Input
+  // ── Input bar
   inputBar: {
-    flexDirection: "row",
-    alignItems: "flex-end",
-    gap: SP.sm,
-    paddingHorizontal: SP.md,
-    paddingTop: SP.sm,
+    flexDirection: "row", alignItems: "flex-end", gap: SP.sm,
+    paddingHorizontal: SP.md, paddingTop: SP.sm,
     paddingBottom: Platform.OS === "ios" ? 28 : SP.md,
-    backgroundColor: C.bg,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: C.border,
+    backgroundColor: C.white,
+    borderTopWidth: 2, borderTopColor: C.ink,
+  },
+  inputWrap: {
+    flex: 1,
+    borderWidth: 2, borderColor: C.ink, borderRadius: 20,
+    backgroundColor: C.white, overflow: "hidden",
   },
   input: {
-    flex: 1,
-    backgroundColor: C.bgSecondary,
-    borderRadius: RADIUS.pill,
-    paddingHorizontal: SP.md,
-    paddingVertical: 11,
-    fontFamily: FONT.regular,
-    fontSize: SIZE.body,
-    color: C.text,
-    maxHeight: 120,
-    lineHeight: SIZE.body * 1.5,
+    paddingHorizontal: SP.md, paddingVertical: 11,
+    fontFamily: FONT.regular, fontSize: SIZE.body, color: C.ink,
+    maxHeight: 120, lineHeight: SIZE.body * 1.5,
   },
+  sendBtnWrap: {
+    position: "relative",
+    width: 42, height: 42,
+    marginBottom: BUBBLE_SHADOW,
+  },
+  sendShadow: {
+    position: "absolute",
+    top: BUBBLE_SHADOW, left: BUBBLE_SHADOW,
+    right: -BUBBLE_SHADOW, bottom: -BUBBLE_SHADOW,
+    backgroundColor: C.coralD, borderRadius: 21,
+  },
+  sendDisabledShadow: { backgroundColor: C.ink3 },
   sendBtn: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    justifyContent: "center",
-    alignItems: "center",
-    ...SHADOW.medium,
+    width: 42, height: 42, borderRadius: 21,
+    backgroundColor: C.coral,
+    borderWidth: 2, borderColor: C.coralD,
+    justifyContent: "center", alignItems: "center",
   },
-  sendArrow: {
-    color: C.white,
-    fontSize: 18,
-    fontWeight: "700",
-    marginTop: -1,
-  },
-  sendDisabled: { opacity: 0.35 },
+  sendDisabled: { backgroundColor: C.mist, borderColor: C.ink3 },
+  sendArrow: { color: C.white, fontSize: 18, fontFamily: FONT.syneBold, marginTop: -1 },
 });

@@ -4,9 +4,8 @@ import {
   ScrollView, Alert, Animated, Image,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { LinearGradient } from "expo-linear-gradient";
-import { C, GRAD } from "../constants/colors";
-import { FONT, SIZE, SP, RADIUS, SHADOW } from "../constants/typography";
+import { C } from "../constants/colors";
+import { FONT, SIZE, SP, RADIUS } from "../constants/typography";
 import { api } from "../services/api";
 
 type Gender = "male" | "female" | "other";
@@ -35,25 +34,29 @@ export interface CharacterProfile {
 }
 
 const GENDER_LABELS: Record<Gender, string> = {
-  male: "男性",
-  female: "女性",
-  other: "どちらでもない",
+  male: "男性", female: "女性", other: "どちらでもない",
 };
 const GENDER_EMOJI: Record<Gender, string> = {
-  male: "👦",
-  female: "👧",
-  other: "🧑",
+  male: "👦", female: "👧", other: "🧑",
 };
 const AGE_LABELS: Record<AgeGroup, string> = {
-  same: "同い年くらい",
-  older: "年上",
-  younger: "年下",
+  same: "同い年くらい", older: "年上", younger: "年下",
 };
 const AGE_EMOJI: Record<AgeGroup, string> = {
-  same: "🤝",
-  older: "🌿",
-  younger: "✨",
+  same: "🤝", older: "🌿", younger: "✨",
 };
+
+// Accent colours for option chips (active state)
+const CHIP_COLORS: Record<string, { bg: string; border: string; shadow: string }> = {
+  female:  { bg: C.coralXL,               border: C.coral,  shadow: C.coralD },
+  male:    { bg: "#E8F4FF",               border: C.sky,    shadow: "#2B6DC4" },
+  other:   { bg: "#F0EEFF",               border: C.lavender, shadow: "#7B6FCC" },
+  same:    { bg: "#F0FFF8",               border: C.sage,   shadow: "#3A9068" },
+  older:   { bg: "#FFFBF0",               border: C.gold,   shadow: "#C8851D" },
+  younger: { bg: C.coralXL,               border: C.coral,  shadow: C.coralD },
+};
+
+const CARD_OFFSET = 4;
 
 export default function CharacterGenerateScreen({
   onCharacterCreated,
@@ -66,21 +69,19 @@ export default function CharacterGenerateScreen({
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  const cardY = useRef(new Animated.Value(50)).current;
+  const cardY = useRef(new Animated.Value(40)).current;
   const cardO = useRef(new Animated.Value(0)).current;
-  const card2Y = useRef(new Animated.Value(50 + 12)).current;
-  const card3Y = useRef(new Animated.Value(50 + 24)).current;
+  const card2Y = useRef(new Animated.Value(52)).current;
+  const card3Y = useRef(new Animated.Value(64)).current;
 
   const animateCardIn = () => {
-    cardY.setValue(50);
-    cardO.setValue(0);
-    card2Y.setValue(62);
-    card3Y.setValue(74);
+    cardY.setValue(40); cardO.setValue(0);
+    card2Y.setValue(52); card3Y.setValue(64);
     Animated.parallel([
-      Animated.spring(cardY, { toValue: 0, useNativeDriver: true, damping: 20, stiffness: 220 }),
-      Animated.spring(card2Y, { toValue: 12, useNativeDriver: true, damping: 20, stiffness: 220 }),
-      Animated.spring(card3Y, { toValue: 24, useNativeDriver: true, damping: 20, stiffness: 220 }),
-      Animated.timing(cardO, { toValue: 1, duration: 200, useNativeDriver: true }),
+      Animated.spring(cardY,  { toValue: 0,  useNativeDriver: true, damping: 18, stiffness: 200 }),
+      Animated.spring(card2Y, { toValue: 10, useNativeDriver: true, damping: 18, stiffness: 200 }),
+      Animated.spring(card3Y, { toValue: 20, useNativeDriver: true, damping: 18, stiffness: 200 }),
+      Animated.timing(cardO,  { toValue: 1, duration: 200, useNativeDriver: true }),
     ]).start();
   };
 
@@ -111,6 +112,7 @@ export default function CharacterGenerateScreen({
     }
   };
 
+  // ── Preview screen ─────────────────────────────────────────────────────
   if (preview) {
     const narrative =
       preview.narrative_profile ||
@@ -128,86 +130,101 @@ export default function CharacterGenerateScreen({
             <Text style={s.stepLabel}>こんな友達はどう？</Text>
             <Text style={s.stepSub}>気に入ったら話しかけてみよう</Text>
 
-            {/* Card stack depth effect */}
+            {/* ── Card stack ─────────────────────────────────────────── */}
             <View style={s.cardStack}>
-              <Animated.View style={[s.cardBehind2, { transform: [{ translateY: card3Y }] }]} />
-              <Animated.View style={[s.cardBehind1, { transform: [{ translateY: card2Y }] }]} />
-
+              {/* cs2 — furthest back (sage) */}
               <Animated.View
-                style={[s.card, { transform: [{ translateY: cardY }], opacity: cardO }]}
-              >
-                {/* Card gradient header */}
-                <LinearGradient
-                  colors={["#FFE8E8", "#E8E8FF"]}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={s.cardGradTop}
-                >
-                  {preview.avatar_url ? (
-                    <Image source={{ uri: preview.avatar_url }} style={s.cardAvatarImg} />
-                  ) : (
-                    <View style={s.cardAvatarFallback}>
-                      <Text style={s.cardAvatarEmoji}>
-                        {preview.gender === "female" ? "👧" : preview.gender === "male" ? "👦" : "🧑"}
-                      </Text>
-                    </View>
-                  )}
-                  <Text style={s.cardName}>{preview.name}</Text>
-                  <Text style={s.cardMeta}>
-                    {preview.age}歳
-                    {preview.occupation ? ` · ${preview.occupation}` : ""}
-                  </Text>
-                </LinearGradient>
+                style={[s.cardBehind2, { transform: [{ translateY: card3Y }] }]}
+              />
+              {/* cs1 — middle (peach) */}
+              <Animated.View
+                style={[s.cardBehind1, { transform: [{ translateY: card2Y }] }]}
+              />
 
-                <View style={s.cardBody}>
-                  <Text style={s.narrativeText}>{narrative}</Text>
+              {/* Main card */}
+              <Animated.View
+                style={[s.cardOuter, { transform: [{ translateY: cardY }], opacity: cardO }]}
+              >
+                {/* hard shadow layer */}
+                <View style={s.cardShadow} />
+                <View style={s.card}>
+                  {/* Coral header */}
+                  <View style={s.cardHeader}>
+                    {preview.avatar_url ? (
+                      <View style={s.cardAvatarOuter}>
+                        <View style={s.cardAvatarShadow} />
+                        <Image source={{ uri: preview.avatar_url }} style={s.cardAvatarImg} />
+                      </View>
+                    ) : (
+                      <View style={s.cardAvatarOuter}>
+                        <View style={s.cardAvatarShadow} />
+                        <View style={s.cardAvatarFallback}>
+                          <Text style={s.cardAvatarEmoji}>
+                            {preview.gender === "female" ? "👧"
+                              : preview.gender === "male" ? "👦" : "🧑"}
+                          </Text>
+                        </View>
+                      </View>
+                    )}
+                    <Text style={s.cardName}>{preview.name}</Text>
+                    <Text style={s.cardMeta}>
+                      {preview.age}歳
+                      {preview.occupation ? ` · ${preview.occupation}` : ""}
+                    </Text>
+                  </View>
+
+                  {/* Body */}
+                  <View style={s.cardBody}>
+                    <Text style={s.narrativeText}>{narrative}</Text>
+                  </View>
                 </View>
               </Animated.View>
             </View>
 
-            {/* Swipe hint */}
             <Text style={s.swipeHint}>↓ スクロールして続きを読む</Text>
           </ScrollView>
 
-          {/* Bottom actions */}
+          {/* ── Bottom actions ───────────────────────────────────────── */}
           <View style={s.bottomBar}>
-            <TouchableOpacity
-              style={s.retryBtn}
-              onPress={fetchPreview}
-              disabled={loading}
-            >
-              {loading ? (
-                <ActivityIndicator size="small" color={C.textSecondary} />
-              ) : (
-                <Text style={s.retryText}>別の子にする</Text>
-              )}
-            </TouchableOpacity>
+            {/* Retry button */}
+            <View style={s.retryOuter}>
+              <View style={s.retryBtnShadow} />
+              <TouchableOpacity
+                style={s.retryBtn}
+                onPress={fetchPreview}
+                disabled={loading}
+              >
+                {loading ? (
+                  <ActivityIndicator size="small" color={C.ink2} />
+                ) : (
+                  <Text style={s.retryText}>別の子にする</Text>
+                )}
+              </TouchableOpacity>
+            </View>
 
-            <TouchableOpacity
-              onPress={confirmCharacter}
-              disabled={saving}
-              activeOpacity={0.85}
-              style={{ flex: 1 }}
-            >
-              <LinearGradient
-                colors={GRAD}
+            {/* Confirm button */}
+            <View style={[s.confirmOuter, { flex: 1 }]}>
+              <View style={s.confirmShadow} />
+              <TouchableOpacity
+                onPress={confirmCharacter}
+                disabled={saving}
+                activeOpacity={0.85}
                 style={[s.confirmBtn, saving && s.disabled]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
               >
                 {saving ? (
                   <ActivityIndicator color={C.white} />
                 ) : (
                   <Text style={s.confirmText}>この子と話す</Text>
                 )}
-              </LinearGradient>
-            </TouchableOpacity>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </SafeAreaView>
     );
   }
 
+  // ── Setup screen ───────────────────────────────────────────────────────
   const canGenerate = gender && ageGroup && !loading;
 
   return (
@@ -222,273 +239,271 @@ export default function CharacterGenerateScreen({
         {/* Gender */}
         <Text style={s.sectionLabel}>性別</Text>
         <View style={s.optionRow}>
-          {(["female", "male", "other"] as Gender[]).map(g => (
-            <TouchableOpacity
-              key={g}
-              style={[s.optionChip, gender === g && s.optionChipActive]}
-              onPress={() => setGender(g)}
-            >
-              <Text style={s.optionEmoji}>{GENDER_EMOJI[g]}</Text>
-              <Text style={[s.optionLabel, gender === g && s.optionLabelActive]}>
-                {GENDER_LABELS[g]}
-              </Text>
-            </TouchableOpacity>
-          ))}
+          {(["female", "male", "other"] as Gender[]).map(g => {
+            const active = gender === g;
+            const colors = CHIP_COLORS[g];
+            return (
+              <View key={g} style={s.chipOuter}>
+                {active && <View style={[s.chipShadow, { backgroundColor: colors.shadow }]} />}
+                <TouchableOpacity
+                  style={[
+                    s.optionChip,
+                    active
+                      ? { backgroundColor: colors.bg, borderColor: colors.border }
+                      : { backgroundColor: C.white, borderColor: C.line },
+                  ]}
+                  onPress={() => setGender(g)}
+                  activeOpacity={0.8}
+                >
+                  <Text style={s.optionEmoji}>{GENDER_EMOJI[g]}</Text>
+                  <Text style={[s.optionLabel, active && { color: colors.border, fontFamily: FONT.syneBold }]}>
+                    {GENDER_LABELS[g]}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            );
+          })}
         </View>
 
         {/* Age */}
         <Text style={s.sectionLabel}>年齢層</Text>
         <View style={s.optionRow}>
-          {(["same", "older", "younger"] as AgeGroup[]).map(a => (
-            <TouchableOpacity
-              key={a}
-              style={[s.optionChip, ageGroup === a && s.optionChipActive]}
-              onPress={() => setAgeGroup(a)}
-            >
-              <Text style={s.optionEmoji}>{AGE_EMOJI[a]}</Text>
-              <Text style={[s.optionLabel, ageGroup === a && s.optionLabelActive]}>
-                {AGE_LABELS[a]}
-              </Text>
-            </TouchableOpacity>
-          ))}
+          {(["same", "older", "younger"] as AgeGroup[]).map(a => {
+            const active = ageGroup === a;
+            const colors = CHIP_COLORS[a];
+            return (
+              <View key={a} style={s.chipOuter}>
+                {active && <View style={[s.chipShadow, { backgroundColor: colors.shadow }]} />}
+                <TouchableOpacity
+                  style={[
+                    s.optionChip,
+                    active
+                      ? { backgroundColor: colors.bg, borderColor: colors.border }
+                      : { backgroundColor: C.white, borderColor: C.line },
+                  ]}
+                  onPress={() => setAgeGroup(a)}
+                  activeOpacity={0.8}
+                >
+                  <Text style={s.optionEmoji}>{AGE_EMOJI[a]}</Text>
+                  <Text style={[s.optionLabel, active && { color: colors.border, fontFamily: FONT.syneBold }]}>
+                    {AGE_LABELS[a]}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            );
+          })}
         </View>
 
         <View style={{ height: SP.xl }} />
 
-        <TouchableOpacity
-          onPress={fetchPreview}
-          disabled={!canGenerate}
-          activeOpacity={0.85}
-        >
-          <LinearGradient
-            colors={canGenerate ? GRAD : [C.bgSecondary, C.bgSecondary]}
-            style={[s.generateBtn, !canGenerate && s.disabled]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
+        {/* Generate button */}
+        <View style={s.generateOuter}>
+          {canGenerate && <View style={s.generateShadow} />}
+          <TouchableOpacity
+            onPress={fetchPreview}
+            disabled={!canGenerate}
+            activeOpacity={0.85}
+            style={[
+              s.generateBtn,
+              canGenerate
+                ? { backgroundColor: C.coral, borderColor: C.coralD }
+                : { backgroundColor: C.mist, borderColor: C.line },
+            ]}
           >
             {loading ? (
-              <ActivityIndicator color={canGenerate ? C.white : C.textTertiary} />
+              <ActivityIndicator color={canGenerate ? C.white : C.ink3} />
             ) : (
               <Text style={[s.generateText, !canGenerate && s.generateTextDisabled]}>
                 友達を生成する
               </Text>
             )}
-          </LinearGradient>
-        </TouchableOpacity>
+          </TouchableOpacity>
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
 }
 
 const s = StyleSheet.create({
-  container: { flex: 1, backgroundColor: C.bg },
+  container: { flex: 1, backgroundColor: C.mist },
 
-  // Setup screen
+  // ── Setup screen
   setupScroll: {
-    paddingHorizontal: SP.md,
-    paddingTop: SP.xl,
-    paddingBottom: 60,
+    paddingHorizontal: SP.md, paddingTop: SP.xl, paddingBottom: 60,
   },
   title: {
-    fontFamily: FONT.black,
-    fontSize: SIZE.title,
-    color: C.text,
-    marginBottom: SP.xs,
+    fontFamily: FONT.syneBlack, fontSize: SIZE.title,
+    color: C.ink, marginBottom: SP.xs,
   },
   subtitle: {
-    fontFamily: FONT.regular,
-    fontSize: SIZE.body,
-    color: C.textSecondary,
-    marginBottom: SP.xxl,
+    fontFamily: FONT.regular, fontSize: SIZE.body,
+    color: C.ink2, marginBottom: SP.xxl,
     lineHeight: SIZE.body * 1.6,
   },
   sectionLabel: {
-    fontFamily: FONT.bold,
-    fontSize: SIZE.label,
-    color: C.textTertiary,
-    letterSpacing: 1,
-    textTransform: "uppercase",
-    marginBottom: SP.sm,
-    marginTop: SP.lg,
+    fontFamily: FONT.syneSemi, fontSize: SIZE.label,
+    color: C.ink2, letterSpacing: 1,
+    textTransform: "uppercase", marginBottom: SP.sm, marginTop: SP.lg,
   },
   optionRow: { flexDirection: "row", gap: SP.sm },
-  optionChip: {
-    flex: 1,
-    paddingVertical: 14,
-    borderRadius: RADIUS.md,
-    backgroundColor: C.bgSecondary,
-    alignItems: "center",
-    gap: 4,
-    borderWidth: 1.5,
-    borderColor: "transparent",
+
+  chipOuter: {
+    flex: 1, position: "relative",
+    marginBottom: CARD_OFFSET, marginRight: CARD_OFFSET,
   },
-  optionChipActive: {
-    backgroundColor: C.accentSofter,
-    borderColor: C.accent,
+  chipShadow: {
+    position: "absolute",
+    top: CARD_OFFSET, left: CARD_OFFSET, right: -CARD_OFFSET, bottom: -CARD_OFFSET,
+    borderRadius: RADIUS.md,
+  },
+  optionChip: {
+    paddingVertical: 14, borderRadius: RADIUS.md,
+    alignItems: "center", gap: 4,
+    borderWidth: 2,
   },
   optionEmoji: { fontSize: 22 },
   optionLabel: {
-    fontFamily: FONT.medium,
-    fontSize: SIZE.caption,
-    color: C.textSecondary,
+    fontFamily: FONT.syne, fontSize: SIZE.caption, color: C.ink2,
   },
-  optionLabelActive: {
-    color: C.accent,
-    fontFamily: FONT.bold,
+
+  // Generate button
+  generateOuter: {
+    position: "relative",
+    marginBottom: CARD_OFFSET + 2, marginRight: CARD_OFFSET + 2,
+  },
+  generateShadow: {
+    position: "absolute",
+    top: CARD_OFFSET, left: CARD_OFFSET, right: -CARD_OFFSET, bottom: -CARD_OFFSET,
+    backgroundColor: C.coralD, borderRadius: RADIUS.lg,
   },
   generateBtn: {
-    borderRadius: RADIUS.lg,
-    paddingVertical: 17,
-    alignItems: "center",
-    ...SHADOW.medium,
+    borderRadius: RADIUS.lg, borderWidth: 2,
+    paddingVertical: 17, alignItems: "center",
   },
-  generateText: {
-    fontFamily: FONT.bold,
-    fontSize: SIZE.subtitle,
-    color: C.white,
-  },
-  generateTextDisabled: { color: C.textTertiary },
+  generateText: { fontFamily: FONT.syneBold, fontSize: SIZE.subtitle, color: C.white },
+  generateTextDisabled: { color: C.ink3 },
 
-  // Preview screen
+  // ── Preview screen
   previewScroll: {
-    paddingHorizontal: SP.md,
-    paddingTop: SP.xl,
-    paddingBottom: 130,
+    paddingHorizontal: SP.md, paddingTop: SP.xl, paddingBottom: 130,
   },
   stepLabel: {
-    fontFamily: FONT.black,
-    fontSize: SIZE.title,
-    color: C.text,
-    marginBottom: SP.xs,
+    fontFamily: FONT.syneBlack, fontSize: SIZE.title, color: C.ink, marginBottom: SP.xs,
   },
   stepSub: {
-    fontFamily: FONT.regular,
-    fontSize: SIZE.body2,
-    color: C.textSecondary,
-    marginBottom: SP.xl,
+    fontFamily: FONT.regular, fontSize: SIZE.body2,
+    color: C.ink2, marginBottom: SP.xl,
   },
 
   // Card stack
   cardStack: {
     position: "relative",
     marginBottom: SP.md,
-  },
-  cardBehind1: {
-    position: "absolute",
-    left: 8,
-    right: 8,
-    top: 0,
-    height: 200,
-    backgroundColor: C.bgSecondary,
-    borderRadius: RADIUS.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: C.border,
+    paddingBottom: 24, // space for bg cards
   },
   cardBehind2: {
     position: "absolute",
-    left: 16,
-    right: 16,
-    top: 0,
-    height: 200,
-    backgroundColor: C.border,
+    left: 16, right: -16, top: 20,
+    height: 180,
+    backgroundColor: C.sage,
     borderRadius: RADIUS.lg,
+    borderWidth: 2, borderColor: C.ink,
+    opacity: 0.6,
+  },
+  cardBehind1: {
+    position: "absolute",
+    left: 8, right: -8, top: 10,
+    height: 180,
+    backgroundColor: C.peach,
+    borderRadius: RADIUS.lg,
+    borderWidth: 2, borderColor: C.ink,
+    opacity: 0.8,
+  },
+  cardOuter: { position: "relative", marginBottom: CARD_OFFSET, marginRight: CARD_OFFSET },
+  cardShadow: {
+    position: "absolute",
+    top: CARD_OFFSET, left: CARD_OFFSET, right: -CARD_OFFSET, bottom: -CARD_OFFSET,
+    backgroundColor: C.ink, borderRadius: RADIUS.lg,
   },
   card: {
-    backgroundColor: C.bg,
-    borderRadius: RADIUS.lg,
-    overflow: "hidden",
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: C.border,
-    ...SHADOW.strong,
-  },
-  cardGradTop: {
-    paddingTop: SP.xl,
-    paddingBottom: SP.xl,
-    alignItems: "center",
-    gap: SP.sm,
-  },
-  cardAvatarImg: {
-    width: 88,
-    height: 88,
-    borderRadius: 44,
-    borderWidth: 3,
-    borderColor: "rgba(255,255,255,0.8)",
-  },
-  cardAvatarFallback: {
-    width: 88,
-    height: 88,
-    borderRadius: 44,
-    backgroundColor: "rgba(255,255,255,0.6)",
-    justifyContent: "center",
-    alignItems: "center",
-    borderWidth: 3,
-    borderColor: "rgba(255,255,255,0.8)",
-  },
-  cardAvatarEmoji: { fontSize: 40 },
-  cardName: {
-    fontFamily: FONT.bold,
-    fontSize: SIZE.title2,
-    color: C.text,
-  },
-  cardMeta: {
-    fontFamily: FONT.regular,
-    fontSize: SIZE.body2,
-    color: C.textSecondary,
-  },
-  cardBody: { padding: SP.lg },
-  narrativeText: {
-    fontFamily: FONT.regular,
-    fontSize: SIZE.body1,
-    color: C.text,
-    lineHeight: SIZE.body1 * 1.7,
-  },
-  swipeHint: {
-    textAlign: "center",
-    fontFamily: FONT.regular,
-    fontSize: SIZE.caption,
-    color: C.textTertiary,
-    marginTop: SP.md,
+    backgroundColor: C.white, borderRadius: RADIUS.lg,
+    borderWidth: 2, borderColor: C.ink, overflow: "hidden",
   },
 
-  // Bottom
-  bottomBar: {
+  // Card header (coral)
+  cardHeader: {
+    backgroundColor: C.coral,
+    borderBottomWidth: 2, borderBottomColor: C.ink,
+    paddingVertical: SP.xl, alignItems: "center", gap: SP.sm,
+  },
+  cardAvatarOuter: {
+    position: "relative",
+    width: 88, height: 88,
+    marginBottom: 4, marginRight: 4,
+  },
+  cardAvatarShadow: {
     position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: SP.sm,
-    paddingHorizontal: SP.md,
-    paddingBottom: 36,
-    paddingTop: SP.sm,
-    backgroundColor: C.bgOverlay,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: C.border,
+    top: 4, left: 4, right: -4, bottom: -4,
+    backgroundColor: C.coralD, borderRadius: 44,
+  },
+  cardAvatarImg: {
+    width: 88, height: 88, borderRadius: 44,
+    borderWidth: 3, borderColor: C.white,
+  },
+  cardAvatarFallback: {
+    width: 88, height: 88, borderRadius: 44,
+    backgroundColor: C.coralXL,
+    borderWidth: 3, borderColor: C.white,
+    justifyContent: "center", alignItems: "center",
+  },
+  cardAvatarEmoji: { fontSize: 38 },
+  cardName: { fontFamily: FONT.syneBlack, fontSize: SIZE.title2, color: C.white },
+  cardMeta: { fontFamily: FONT.syne, fontSize: SIZE.body2, color: "rgba(255,255,255,0.8)" },
+
+  // Card body
+  cardBody: { padding: SP.lg },
+  narrativeText: {
+    fontFamily: FONT.regular, fontSize: SIZE.body1,
+    color: C.ink, lineHeight: SIZE.body1 * 1.7,
+  },
+  swipeHint: {
+    textAlign: "center", fontFamily: FONT.syne,
+    fontSize: SIZE.caption, color: C.ink3, marginTop: SP.md,
+  },
+
+  // Bottom bar
+  bottomBar: {
+    position: "absolute", bottom: 0, left: 0, right: 0,
+    flexDirection: "row", alignItems: "center", gap: SP.sm,
+    paddingHorizontal: SP.md, paddingBottom: 36, paddingTop: SP.sm,
+    backgroundColor: C.white,
+    borderTopWidth: 2, borderTopColor: C.ink,
+  },
+
+  retryOuter: { position: "relative", marginBottom: CARD_OFFSET, marginRight: CARD_OFFSET },
+  retryBtnShadow: {
+    position: "absolute",
+    top: CARD_OFFSET, left: CARD_OFFSET, right: -CARD_OFFSET, bottom: -CARD_OFFSET,
+    backgroundColor: C.ink, borderRadius: RADIUS.md,
   },
   retryBtn: {
-    paddingHorizontal: SP.md,
-    paddingVertical: 17,
-    borderRadius: RADIUS.lg,
-    backgroundColor: C.bgSecondary,
-    minWidth: 100,
-    alignItems: "center",
+    paddingHorizontal: SP.md, paddingVertical: 17,
+    borderRadius: RADIUS.md, borderWidth: 2, borderColor: C.ink,
+    backgroundColor: C.white, minWidth: 100, alignItems: "center",
   },
-  retryText: {
-    fontFamily: FONT.medium,
-    fontSize: SIZE.body,
-    color: C.textSecondary,
+  retryText: { fontFamily: FONT.syneSemi, fontSize: SIZE.body, color: C.ink },
+
+  confirmOuter: { position: "relative", marginBottom: CARD_OFFSET, marginRight: CARD_OFFSET },
+  confirmShadow: {
+    position: "absolute",
+    top: CARD_OFFSET, left: CARD_OFFSET, right: -CARD_OFFSET, bottom: -CARD_OFFSET,
+    backgroundColor: C.coralD, borderRadius: RADIUS.md,
   },
   confirmBtn: {
-    borderRadius: RADIUS.lg,
-    paddingVertical: 17,
-    alignItems: "center",
-    ...SHADOW.medium,
+    borderRadius: RADIUS.md, borderWidth: 2, borderColor: C.coralD,
+    paddingVertical: 17, alignItems: "center",
+    backgroundColor: C.coral,
   },
-  confirmText: {
-    fontFamily: FONT.bold,
-    fontSize: SIZE.subtitle,
-    color: C.white,
-  },
+  confirmText: { fontFamily: FONT.syneBold, fontSize: SIZE.subtitle, color: C.white },
   disabled: { opacity: 0.4 },
 });

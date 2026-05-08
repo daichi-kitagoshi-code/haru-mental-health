@@ -4,10 +4,10 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { C } from "../constants/colors";
-import { FONT, SIZE, SP, SHADOW } from "../constants/typography";
+import { FONT, SIZE, SP } from "../constants/typography";
 import * as SecureStore from "expo-secure-store";
 import { api } from "../services/api";
-import { Home, MessageCircle, Users, Settings } from "lucide-react-native";
+import { Home, MessageCircle, Users, Settings, Plus } from "lucide-react-native";
 
 import OnboardingScreen from "../screens/OnboardingScreen";
 import HomeScreen, { CharacterProfile } from "../screens/HomeScreen";
@@ -18,22 +18,109 @@ import SettingsScreen from "../screens/SettingsScreen";
 
 type Tab = "home" | "chat" | "friends" | "settings";
 
-const TABS: { key: Tab; label: string; Icon: any }[] = [
-  { key: "home", label: "ホーム", Icon: Home },
-  { key: "chat", label: "チャット", Icon: MessageCircle },
-  { key: "friends", label: "友達", Icon: Users },
+// ── Bottom tab bar ─────────────────────────────────────────────────────────
+// Layout: [home] [chat] [+ center button] [friends] [settings]
+const LEFT_TABS: { key: Tab; label: string; Icon: any }[] = [
+  { key: "home",  label: "ホーム",  Icon: Home },
+  { key: "chat",  label: "チャット", Icon: MessageCircle },
+];
+const RIGHT_TABS: { key: Tab; label: string; Icon: any }[] = [
+  { key: "friends",  label: "友達", Icon: Users },
   { key: "settings", label: "設定", Icon: Settings },
 ];
 
+const CENTER_SIZE  = 58;
+const CENTER_RISE  = 18;   // how far the + button rises above the bar
+const BAR_HEIGHT   = 60;
+const SHADOW_OFFSET = 3;
+
+function BottomTabBar({
+  activeTab,
+  onPress,
+  onPressCenter,
+}: {
+  activeTab: Tab;
+  onPress: (t: Tab) => void;
+  onPressCenter: () => void;
+}) {
+  return (
+    <SafeAreaView edges={["bottom"]} style={s.barSafe}>
+      {/* Hard-shadow top border */}
+      <View style={s.barTopBorder} />
+
+      <View style={s.bar}>
+        {/* Left tabs */}
+        {LEFT_TABS.map(({ key, label, Icon }) => {
+          const active = activeTab === key;
+          return (
+            <TouchableOpacity
+              key={key}
+              style={s.barItem}
+              onPress={() => onPress(key)}
+              activeOpacity={0.7}
+            >
+              {active && <View style={s.activeIndicator} />}
+              <Icon
+                size={22}
+                color={active ? C.coral : C.ink3}
+                strokeWidth={active ? 2.5 : 1.8}
+              />
+              <Text style={[s.barLabel, active && s.barLabelActive]}>{label}</Text>
+            </TouchableOpacity>
+          );
+        })}
+
+        {/* Center spacer (occupied by floating button) */}
+        <View style={s.centerSpace} />
+
+        {/* Right tabs */}
+        {RIGHT_TABS.map(({ key, label, Icon }) => {
+          const active = activeTab === key;
+          return (
+            <TouchableOpacity
+              key={key}
+              style={s.barItem}
+              onPress={() => onPress(key)}
+              activeOpacity={0.7}
+            >
+              {active && <View style={s.activeIndicator} />}
+              <Icon
+                size={22}
+                color={active ? C.coral : C.ink3}
+                strokeWidth={active ? 2.5 : 1.8}
+              />
+              <Text style={[s.barLabel, active && s.barLabelActive]}>{label}</Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+
+      {/* ── Floating center + button ─────────────────────────────────── */}
+      <View style={s.centerBtnContainer} pointerEvents="box-none">
+        {/* flat shadow */}
+        <View style={s.centerBtnShadow} />
+        <TouchableOpacity
+          onPress={onPressCenter}
+          activeOpacity={0.85}
+          style={s.centerBtn}
+        >
+          <Plus size={28} color={C.white} strokeWidth={2.5} />
+        </TouchableOpacity>
+      </View>
+    </SafeAreaView>
+  );
+}
+
+// ── AppNavigator ───────────────────────────────────────────────────────────
 export default function AppNavigator() {
-  const [isAuth, setIsAuth] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [showGenerate, setShowGenerate] = useState(false);
-  const [characters, setCharacters] = useState<CharacterProfile[]>([]);
-  const [selectedCharacter, setSelectedCharacter] = useState<CharacterProfile | null>(null);
-  const [profileCharacter, setProfileCharacter] = useState<CharacterProfile | null>(null);
-  const [userPlan, setUserPlan] = useState("free");
-  const [activeTab, setActiveTab] = useState<Tab>("home");
+  const [isAuth,          setIsAuth]          = useState(false);
+  const [loading,         setLoading]         = useState(true);
+  const [showGenerate,    setShowGenerate]    = useState(false);
+  const [characters,      setCharacters]      = useState<CharacterProfile[]>([]);
+  const [selectedChar,    setSelectedChar]    = useState<CharacterProfile | null>(null);
+  const [profileChar,     setProfileChar]     = useState<CharacterProfile | null>(null);
+  const [userPlan,        setUserPlan]        = useState("free");
+  const [activeTab,       setActiveTab]       = useState<Tab>("home");
 
   useEffect(() => { checkAuth(); }, []);
 
@@ -44,7 +131,7 @@ export default function AppNavigator() {
       const chars = await api.characters.list();
       setCharacters(chars);
       setIsAuth(true);
-      if (chars.length > 0) setSelectedCharacter(chars[0]);
+      if (chars.length > 0) setSelectedChar(chars[0]);
       else setShowGenerate(true);
     } catch {
       await SecureStore.deleteItemAsync("access_token");
@@ -59,7 +146,7 @@ export default function AppNavigator() {
       setCharacters(chars);
       setIsAuth(true);
       if (chars.length === 0) setShowGenerate(true);
-      else setSelectedCharacter(chars[0]);
+      else setSelectedChar(chars[0]);
     } catch {
       setIsAuth(true);
       setShowGenerate(true);
@@ -68,7 +155,7 @@ export default function AppNavigator() {
 
   const handleCharacterCreated = (character: CharacterProfile) => {
     setCharacters(prev => [...prev, character]);
-    setSelectedCharacter(character);
+    setSelectedChar(character);
     setShowGenerate(false);
     setActiveTab("chat");
   };
@@ -78,41 +165,45 @@ export default function AppNavigator() {
     await SecureStore.deleteItemAsync("user_id");
     setIsAuth(false);
     setCharacters([]);
-    setSelectedCharacter(null);
+    setSelectedChar(null);
     setShowGenerate(false);
-    setProfileCharacter(null);
+    setProfileChar(null);
     setActiveTab("home");
   };
 
   const handleSelectCharacter = (c: CharacterProfile) => {
-    setSelectedCharacter(c);
+    setSelectedChar(c);
     setActiveTab("chat");
   };
 
   const handleOpenProfile = (c: CharacterProfile) => {
-    setProfileCharacter(c);
+    setProfileChar(c);
   };
 
+  // Loading
   if (loading) {
     return (
       <View style={s.loadingWrap}>
-        <ActivityIndicator size="large" color={C.textTertiary} />
+        <ActivityIndicator size="large" color={C.ink3} />
       </View>
     );
   }
 
+  // Unauthenticated
   if (!isAuth) return <OnboardingScreen onLoginSuccess={handleLoginSuccess} />;
+
+  // Character generation
   if (showGenerate) return <CharacterGenerateScreen onCharacterCreated={handleCharacterCreated} />;
 
   // Profile overlay
-  if (profileCharacter) {
+  if (profileChar) {
     return (
       <CharacterProfileScreen
-        character={profileCharacter}
-        onBack={() => setProfileCharacter(null)}
+        character={profileChar}
+        onBack={() => setProfileChar(null)}
         onChat={() => {
-          setSelectedCharacter(profileCharacter);
-          setProfileCharacter(null);
+          setSelectedChar(profileChar);
+          setProfileChar(null);
           setActiveTab("chat");
         }}
       />
@@ -121,6 +212,7 @@ export default function AppNavigator() {
 
   return (
     <View style={s.root}>
+      {/* ── Tab content ─────────────────────────────────────────────── */}
       <View style={s.screens}>
         {activeTab === "home" && (
           <HomeScreen
@@ -133,15 +225,26 @@ export default function AppNavigator() {
         )}
 
         {activeTab === "chat" && (
-          selectedCharacter ? (
-            <ChatScreen character={selectedCharacter} />
+          selectedChar ? (
+            <ChatScreen character={selectedChar} />
           ) : (
             <View style={s.emptyWrap}>
-              <Text style={s.emptyEmoji}>💬</Text>
-              <Text style={s.emptyText}>友達を選んで話しかけよう</Text>
-              <TouchableOpacity onPress={() => setActiveTab("home")} style={s.emptyBtn}>
-                <Text style={s.emptyBtnText}>ホームへ</Text>
-              </TouchableOpacity>
+              {/* Empty state card */}
+              <View style={s.emptyCardOuter}>
+                <View style={s.emptyCardShadow} />
+                <View style={s.emptyCard}>
+                  <Text style={s.emptyEmoji}>💬</Text>
+                  <Text style={s.emptyTitle}>友達を選んで話しかけよう</Text>
+                  <Text style={s.emptyBody}>ホームから友達を選ぶか、新しい友達を作ってね</Text>
+                </View>
+              </View>
+
+              <View style={s.emptyBtnOuter}>
+                <View style={s.emptyBtnShadow} />
+                <TouchableOpacity onPress={() => setActiveTab("home")} style={s.emptyBtn}>
+                  <Text style={s.emptyBtnText}>ホームへ</Text>
+                </TouchableOpacity>
+              </View>
             </View>
           )
         )}
@@ -161,117 +264,127 @@ export default function AppNavigator() {
         )}
       </View>
 
-      <BottomTabBar activeTab={activeTab} onPress={setActiveTab} />
+      {/* ── Bottom nav ───────────────────────────────────────────────── */}
+      <BottomTabBar
+        activeTab={activeTab}
+        onPress={setActiveTab}
+        onPressCenter={() => setShowGenerate(true)}
+      />
     </View>
   );
 }
 
-function BottomTabBar({
-  activeTab,
-  onPress,
-}: {
-  activeTab: Tab;
-  onPress: (t: Tab) => void;
-}) {
-  return (
-    <SafeAreaView edges={["bottom"]} style={s.barSafe}>
-      <View style={s.bar}>
-        {TABS.map(({ key, label, Icon }) => {
-          const active = activeTab === key;
-          return (
-            <TouchableOpacity
-              key={key}
-              style={s.barItem}
-              onPress={() => onPress(key)}
-              activeOpacity={0.7}
-            >
-              <View style={[s.iconWrap, active && s.iconWrapActive]}>
-                <Icon
-                  size={22}
-                  color={active ? C.accent : C.textTertiary}
-                  strokeWidth={active ? 2.5 : 1.8}
-                />
-              </View>
-              <Text style={[s.barLabel, active && s.barLabelActive]}>{label}</Text>
-            </TouchableOpacity>
-          );
-        })}
-      </View>
-    </SafeAreaView>
-  );
-}
-
 const s = StyleSheet.create({
-  root: { flex: 1, backgroundColor: C.bg },
+  root: { flex: 1, backgroundColor: C.mist },
   loadingWrap: {
-    flex: 1,
-    backgroundColor: C.bg,
-    justifyContent: "center",
-    alignItems: "center",
+    flex: 1, backgroundColor: C.mist,
+    justifyContent: "center", alignItems: "center",
   },
   screens: { flex: 1 },
 
-  // Tab bar
+  // ── Bar chrome
   barSafe: {
-    backgroundColor: C.bgOverlay,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: C.border,
+    backgroundColor: C.white,
+    position: "relative",
+  },
+  barTopBorder: {
+    height: 2, backgroundColor: C.ink,
   },
   bar: {
     flexDirection: "row",
-    height: 56,
+    height: BAR_HEIGHT,
     paddingBottom: Platform.OS === "ios" ? 0 : 4,
+    alignItems: "center",
   },
   barItem: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 3,
-    paddingTop: 6,
+    flex: 1, alignItems: "center", justifyContent: "center",
+    gap: 3, paddingTop: 6, position: "relative",
   },
-  iconWrap: {
-    width: 36,
-    height: 28,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 10,
-  },
-  iconWrapActive: {
-    backgroundColor: C.accentSofter,
+  activeIndicator: {
+    position: "absolute", top: 0,
+    width: 24, height: 3,
+    backgroundColor: C.coral, borderRadius: 0,
   },
   barLabel: {
-    fontFamily: FONT.regular,
-    fontSize: SIZE.label,
-    color: C.textTertiary,
+    fontFamily: FONT.syne, fontSize: SIZE.label, color: C.ink3,
   },
   barLabelActive: {
-    fontFamily: FONT.bold,
-    color: C.accent,
+    fontFamily: FONT.syneBold, color: C.coral,
   },
 
-  // Empty chat state
-  emptyWrap: {
-    flex: 1,
+  // Center spacer — same width as one barItem
+  centerSpace: { flex: 1 },
+
+  // ── Floating + button
+  centerBtnContainer: {
+    position: "absolute",
+    alignSelf: "center",
+    // sit above bar top border
+    top: -(CENTER_SIZE / 2 + CENTER_RISE) + 2,
+  },
+  centerBtnShadow: {
+    position: "absolute",
+    top: SHADOW_OFFSET,
+    left: SHADOW_OFFSET,
+    right: -SHADOW_OFFSET,
+    bottom: -SHADOW_OFFSET,
+    backgroundColor: C.coralD,
+    borderRadius: CENTER_SIZE / 2,
+  },
+  centerBtn: {
+    width: CENTER_SIZE,
+    height: CENTER_SIZE,
+    borderRadius: CENTER_SIZE / 2,
+    backgroundColor: C.coral,
+    borderWidth: 2,
+    borderColor: C.coralD,
     justifyContent: "center",
     alignItems: "center",
-    gap: SP.md,
+  },
+
+  // ── Empty chat state
+  emptyWrap: {
+    flex: 1, justifyContent: "center", alignItems: "center",
+    gap: SP.lg, paddingHorizontal: SP.xl,
+  },
+  emptyCardOuter: {
+    position: "relative", width: "100%",
+    marginBottom: 4, marginRight: 4,
+  },
+  emptyCardShadow: {
+    position: "absolute",
+    top: 4, left: 4, right: -4, bottom: -4,
+    backgroundColor: C.ink, borderRadius: 16,
+  },
+  emptyCard: {
+    backgroundColor: C.white,
+    borderWidth: 2, borderColor: C.ink, borderRadius: 16,
+    padding: SP.xl, alignItems: "center", gap: SP.sm,
   },
   emptyEmoji: { fontSize: 48 },
-  emptyText: {
-    fontFamily: FONT.regular,
-    fontSize: SIZE.body,
-    color: C.textSecondary,
+  emptyTitle: {
+    fontFamily: FONT.syneBold, fontSize: SIZE.subtitle, color: C.ink,
+    textAlign: "center",
+  },
+  emptyBody: {
+    fontFamily: FONT.regular, fontSize: SIZE.body2, color: C.ink2,
+    textAlign: "center", lineHeight: SIZE.body2 * 1.6,
+  },
+  emptyBtnOuter: {
+    position: "relative",
+    marginBottom: 4, marginRight: 4,
+  },
+  emptyBtnShadow: {
+    position: "absolute",
+    top: 4, left: 4, right: -4, bottom: -4,
+    backgroundColor: C.coralD, borderRadius: 12,
   },
   emptyBtn: {
-    marginTop: SP.sm,
-    backgroundColor: C.text,
-    borderRadius: 12,
-    paddingHorizontal: SP.lg,
-    paddingVertical: 12,
+    backgroundColor: C.coral,
+    borderWidth: 2, borderColor: C.coralD, borderRadius: 12,
+    paddingHorizontal: SP.xl, paddingVertical: 14,
   },
   emptyBtnText: {
-    fontFamily: FONT.bold,
-    fontSize: SIZE.body1,
-    color: C.white,
+    fontFamily: FONT.syneBold, fontSize: SIZE.body1, color: C.white,
   },
 });
