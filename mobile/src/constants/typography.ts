@@ -20,6 +20,7 @@ export const FONT = {
   monoSemi:  "InstrumentSans_600SemiBold",
   monoBold:  "InstrumentSans_700Bold",
   monoBlack: "InstrumentSans_700Bold",
+  sansBold:  "InstrumentSans_700Bold",
 } as const;
 
 export const SIZE = {

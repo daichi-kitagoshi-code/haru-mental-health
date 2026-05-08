@@ -177,12 +177,13 @@ export default function HomeScreen({ characters, onSelectCharacter, onOpenProfil
       >
         {/* Header */}
         <View style={s.header}>
+          <Text style={s.haruWordmark}>haru</Text>
           <Text style={s.greeting}>おかえり 👋</Text>
-          <Text style={s.titleRow}>
+          <View style={s.titleRow}>
             <Text style={s.titleNormal}>友達の</Text>
             <Text style={s.titleAccent}>近況</Text>
             <Text style={s.titleNormal}>をチェック</Text>
-          </Text>
+          </View>
         </View>
 
         {/* Stories */}
@@ -349,11 +350,18 @@ const fr = StyleSheet.create({
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: C.bg },
   scroll: { paddingBottom: 24 },
-  header: { paddingHorizontal: SP.md, paddingTop: SP.sm, paddingBottom: SP.md },
-  greeting: { fontSize: SIZE.body2, color: C.textTertiary, fontFamily: FONT.regular, marginBottom: 4 },
-  titleRow: { lineHeight: 38 },
-  titleNormal: { fontSize: 28, fontFamily: FONT.black, color: C.text, letterSpacing: -1 },
-  titleAccent: { fontSize: 28, fontFamily: FONT.black, color: C.accent, letterSpacing: -1 },
+  header: { paddingHorizontal: SP.md, paddingTop: SP.md, paddingBottom: SP.md },
+  haruWordmark: {
+    fontFamily: FONT.display,
+    fontSize: 28,
+    color: C.accent,
+    letterSpacing: -0.5,
+    marginBottom: 6,
+  },
+  greeting: { fontSize: SIZE.body2, color: C.textTertiary, fontFamily: FONT.sans, marginBottom: 2 },
+  titleRow: { flexDirection: "row", flexWrap: "wrap", alignItems: "baseline" },
+  titleNormal: { fontSize: 28, fontFamily: FONT.black, color: C.text, letterSpacing: -0.5 },
+  titleAccent: { fontSize: 28, fontFamily: FONT.black, color: C.accent, letterSpacing: -0.5 },
   stories: { marginBottom: SP.md },
   storiesContent: { paddingHorizontal: SP.md, paddingVertical: SP.xs },
   sectionHeader: {
@@ -361,10 +369,10 @@ const s = StyleSheet.create({
     paddingHorizontal: SP.md, marginBottom: 10, marginTop: 4,
   },
   sectionLabel: {
-    fontSize: SIZE.label, fontFamily: FONT.monoBold, color: C.textTertiary,
-    letterSpacing: 1.2,
+    fontSize: SIZE.label, fontFamily: FONT.sansBold, color: C.textTertiary,
+    letterSpacing: 1.4, textTransform: "uppercase" as const,
   },
-  sectionAction: { fontSize: SIZE.body2, color: C.accent, fontFamily: FONT.bold },
+  sectionAction: { fontSize: SIZE.body2, color: C.accent, fontFamily: FONT.sansSemi },
   empty: { alignItems: "center", paddingTop: 60, paddingHorizontal: SP.xl },
   emptyEmoji: { fontSize: 56, marginBottom: 20 },
   emptyTitle: { fontSize: SIZE.title2, fontFamily: FONT.black, color: C.text, marginBottom: 8, letterSpacing: -0.5 },
