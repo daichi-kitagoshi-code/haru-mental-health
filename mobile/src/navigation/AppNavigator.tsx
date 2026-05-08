@@ -9,6 +9,7 @@ import * as SecureStore from "expo-secure-store";
 import { api } from "../services/api";
 import { Home, MessageCircle, Users, Settings, Plus } from "lucide-react-native";
 
+import { usePushNotifications } from "../hooks/usePushNotifications";
 import OnboardingScreen from "../screens/OnboardingScreen";
 import HomeScreen, { CharacterProfile } from "../screens/HomeScreen";
 import CharacterGenerateScreen from "../screens/CharacterGenerateScreen";
@@ -121,6 +122,9 @@ export default function AppNavigator() {
   const [profileChar,     setProfileChar]     = useState<CharacterProfile | null>(null);
   const [userPlan,        setUserPlan]        = useState("free");
   const [activeTab,       setActiveTab]       = useState<Tab>("home");
+
+  // プッシュ通知：ログイン後に自動登録
+  usePushNotifications(isAuth);
 
   useEffect(() => { checkAuth(); }, []);
 

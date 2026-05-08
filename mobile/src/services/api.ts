@@ -138,5 +138,16 @@ export const api = {
         method: "POST",
         body: JSON.stringify({ token, enabled }),
       }),
+    getSettings: () => request("/notifications/settings"),
+    updateSettings: (data: {
+      birthday?: string | null;
+      notify_morning?: boolean;
+      notify_evening?: boolean;
+      notify_inactive?: boolean;
+    }) =>
+      request("/notifications/settings", {
+        method: "PATCH",
+        body: JSON.stringify(data),
+      }),
   },
 };
