@@ -137,8 +137,13 @@ export default function AppNavigator() {
       setIsAuth(true);
       if (chars.length > 0) setSelectedChar(chars[0]);
       else setShowGenerate(true);
-    } catch {
-      await SecureStore.deleteItemAsync("access_token");
+    } catch (err: any) {
+      // auth errors: token expired or invalid → clear all auth storage
+      if (err?.kind === "auth") {
+        await SecureStore.deleteItemAsync("access_token");
+        await SecureStore.deleteItemAsync("refresh_token");
+      }
+      // Other errors (network etc.) → keep logged in, don't delete token
     } finally {
       setLoading(false);
     }
@@ -166,6 +171,7 @@ export default function AppNavigator() {
 
   const handleLogout = async () => {
     await SecureStore.deleteItemAsync("access_token");
+    await SecureStore.deleteItemAsync("refresh_token");
     await SecureStore.deleteItemAsync("user_id");
     setIsAuth(false);
     setCharacters([]);

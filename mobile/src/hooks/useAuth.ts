@@ -30,6 +30,7 @@ export const useAuth = create<AuthState>((set) => ({
     const result = await api.auth.signUp(email, password, name);
     await SecureStore.setItemAsync("access_token", result.access_token);
     await SecureStore.setItemAsync("user_id", result.user_id);
+    if (result.refresh_token) await SecureStore.setItemAsync("refresh_token", result.refresh_token);
     set({ isAuthenticated: true, userId: result.user_id });
   },
 
@@ -37,12 +38,14 @@ export const useAuth = create<AuthState>((set) => ({
     const result = await api.auth.signIn(email, password);
     await SecureStore.setItemAsync("access_token", result.access_token);
     await SecureStore.setItemAsync("user_id", result.user_id);
+    if (result.refresh_token) await SecureStore.setItemAsync("refresh_token", result.refresh_token);
     set({ isAuthenticated: true, userId: result.user_id });
   },
 
   signOut: async () => {
     await api.auth.signOut();
     await SecureStore.deleteItemAsync("access_token");
+    await SecureStore.deleteItemAsync("refresh_token");
     await SecureStore.deleteItemAsync("user_id");
     set({ isAuthenticated: false, userId: null });
   },

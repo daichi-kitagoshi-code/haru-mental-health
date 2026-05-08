@@ -18,7 +18,7 @@ async function getToken(): Promise<string | null> {
   return await SecureStore.getItemAsync("access_token");
 }
 
-function classifyStatus(status: number, detail: string): ApiError["kind"] {
+function classifyStatus(status: number, _detail: string): ApiError["kind"] {
   if (status === 401 || status === 403) return "auth";
   if (status === 429 || status === 503) return "rate_limit";
   if (status === 504) return "timeout";
@@ -26,11 +26,49 @@ function classifyStatus(status: number, detail: string): ApiError["kind"] {
   return "unknown";
 }
 
+// ── Token refresh ──────────────────────────────────────────────────────────
+// Deduplicate concurrent refresh calls — only one in-flight at a time.
+let _refreshPromise: Promise<boolean> | null = null;
+
+async function refreshAccessToken(): Promise<boolean> {
+  if (_refreshPromise) return _refreshPromise;
+  _refreshPromise = (async () => {
+    try {
+      const refreshToken = await SecureStore.getItemAsync("refresh_token");
+      if (!refreshToken) return false;
+
+      const res = await fetch(`${API_BASE_URL}/auth/refresh`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ refresh_token: refreshToken }),
+      });
+      if (!res.ok) {
+        await SecureStore.deleteItemAsync("access_token");
+        await SecureStore.deleteItemAsync("refresh_token");
+        return false;
+      }
+      const data = await res.json();
+      await SecureStore.setItemAsync("access_token", data.access_token);
+      await SecureStore.setItemAsync("refresh_token", data.refresh_token);
+      console.log("[api] token refreshed successfully");
+      return true;
+    } catch (e) {
+      console.warn("[api] token refresh failed:", e);
+      return false;
+    } finally {
+      _refreshPromise = null;
+    }
+  })();
+  return _refreshPromise;
+}
+
+// ── Core request ───────────────────────────────────────────────────────────
 async function request(
   path: string,
   options: RequestInit = {},
-  timeoutMs = 120_000,   // 2 min — allows backend to do up to 3 retries (each 30s)
-) {
+  timeoutMs = 120_000,   // 2 min — allows backend to do up to 8 retries
+  _isRetry = false,      // prevent infinite refresh loop
+): Promise<any> {
   const token = await getToken();
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
@@ -57,6 +95,17 @@ async function request(
     console.log(`[api] ← ${response.status} ${path} (${Date.now() - t0}ms)`);
 
     if (!response.ok) {
+      // ── Auto-refresh on 401 (token expired) ──────────────────────────
+      if (response.status === 401 && !_isRetry && !path.startsWith("/auth/")) {
+        console.log("[api] 401 received, attempting token refresh…");
+        const refreshed = await refreshAccessToken();
+        if (refreshed) {
+          // Retry original request with new token — once
+          return request(path, options, timeoutMs, true);
+        }
+        // Refresh failed → fall through and throw auth error
+      }
+
       const body = await response.json().catch(() => ({ detail: "エラーが発生しました" }));
       const detail: string = body.detail ?? "エラーが発生しました";
       const kind = classifyStatus(response.status, detail);

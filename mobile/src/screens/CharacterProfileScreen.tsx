@@ -146,21 +146,15 @@ export default function CharacterProfileScreen({ character, onBack, onChat }: Pr
             {" · "}{location}
           </Text>
 
-          {/* Stat pills */}
+          {/* Stat pills — info only, not interactive */}
           <View style={s.statRow}>
-            <View style={s.statPillOuter}>
-              <View style={s.statPillShadow} />
-              <View style={s.statPill}>
-                <Text style={s.statLabel}>性格</Text>
-                <Text style={s.statValue} numberOfLines={1}>{character.personality}</Text>
-              </View>
+            <View style={s.statPill}>
+              <Text style={s.statLabel}>性格</Text>
+              <Text style={s.statValue} numberOfLines={1}>{character.personality}</Text>
             </View>
-            <View style={s.statPillOuter}>
-              <View style={s.statPillShadow} />
-              <View style={s.statPill}>
-                <Text style={s.statLabel}>話し方</Text>
-                <Text style={s.statValue} numberOfLines={1}>{character.speech_style}</Text>
-              </View>
+            <View style={s.statPill}>
+              <Text style={s.statLabel}>話し方</Text>
+              <Text style={s.statValue} numberOfLines={1}>{character.speech_style}</Text>
             </View>
           </View>
         </View>
@@ -315,21 +309,14 @@ const s = StyleSheet.create({
   },
 
   statRow: { flexDirection: "row", gap: SP.sm, marginTop: SP.xs },
-  statPillOuter: {
-    position: "relative", flex: 1,
-    marginBottom: 3, marginRight: 3,
-  },
-  statPillShadow: {
-    position: "absolute",
-    top: 3, left: 3, right: -3, bottom: -3,
-    backgroundColor: C.coralD, borderRadius: RADIUS.sm,
-  },
   statPill: {
-    borderWidth: 2, borderColor: "rgba(255,255,255,0.6)",
-    borderRadius: RADIUS.sm, paddingVertical: 6, paddingHorizontal: 10,
-    backgroundColor: "rgba(255,255,255,0.2)", alignItems: "center",
+    flex: 1,
+    borderRadius: RADIUS.pill,
+    paddingVertical: 6, paddingHorizontal: 12,
+    backgroundColor: "rgba(255,255,255,0.18)",
+    alignItems: "center",
   },
-  statLabel: { fontFamily: FONT.syne, fontSize: SIZE.label, color: "rgba(255,255,255,0.7)" },
+  statLabel: { fontFamily: FONT.syne, fontSize: SIZE.label, color: "rgba(255,255,255,0.65)" },
   statValue: { fontFamily: FONT.syneBold, fontSize: SIZE.small, color: C.white },
 
   // ── Tabs

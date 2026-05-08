@@ -29,6 +29,7 @@ export default function OnboardingScreen({ onLoginSuccess }: Props) {
       const result = await api.auth.signUp(email.trim(), password, name.trim());
       await SecureStore.setItemAsync("access_token", result.access_token);
       await SecureStore.setItemAsync("user_id", result.user_id);
+      if (result.refresh_token) await SecureStore.setItemAsync("refresh_token", result.refresh_token);
       onLoginSuccess();
     } catch (e: any) { setError(e.message || "登録に失敗しました"); }
     finally { setLoading(false); }
@@ -41,6 +42,7 @@ export default function OnboardingScreen({ onLoginSuccess }: Props) {
       const result = await api.auth.signIn(email.trim(), password);
       await SecureStore.setItemAsync("access_token", result.access_token);
       await SecureStore.setItemAsync("user_id", result.user_id);
+      if (result.refresh_token) await SecureStore.setItemAsync("refresh_token", result.refresh_token);
       onLoginSuccess();
     } catch (e: any) { setError(e.message || "ログインに失敗しました"); }
     finally { setLoading(false); }
