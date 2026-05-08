@@ -1,3 +1,4 @@
+import logging
 from fastapi import APIRouter, HTTPException, Header, BackgroundTasks
 from supabase import create_client
 from app.core.config import settings
@@ -6,6 +7,8 @@ from app.services.chat_service import generate_reply
 from app.services.memory_service import extract_memories
 from app.services.risk_analyzer import analyze_risk_from_conversation
 from datetime import datetime, timezone
+
+logger = logging.getLogger(__name__)
 
 MEMORY_EXTRACTION_INTERVAL = 10
 
@@ -114,13 +117,35 @@ async def send_message(request: MessageRequest, background_tasks: BackgroundTask
         .execute()
     conversation_history = list(reversed(history.data)) if history.data else []
 
-    result = await generate_reply(
-        user_message=request.content,
-        conversation_history=conversation_history,
-        character=character,
-        user_name=user_name,
-        user_memories=memories.data if memories.data else [],
-    )
+    try:
+        result = await generate_reply(
+            user_message=request.content,
+            conversation_history=conversation_history,
+            character=character,
+            user_name=user_name,
+            user_memories=memories.data if memories.data else [],
+        )
+    except RuntimeError as e:
+        err = str(e)
+        logger.error("[chat router] generate_reply failed: %s user_id=%s", err, user_id)
+        if "rate_limit" in err:
+            raise HTTPException(
+                status_code=503,
+                detail="RATE_LIMIT: しばらく時間をおいてからもう一度試してね",
+            )
+        elif "timeout" in err:
+            raise HTTPException(
+                status_code=504,
+                detail="TIMEOUT: 応答に時間がかかりすぎました。もう一度試してね",
+            )
+        else:
+            raise HTTPException(
+                status_code=502,
+                detail="API_ERROR: 応答の生成に失敗しました。もう一度試してね",
+            )
+    except Exception as e:
+        logger.exception("[chat router] unexpected error: %s user_id=%s", str(e), user_id)
+        raise HTTPException(status_code=500, detail="INTERNAL_ERROR: サーバーエラーが発生しました")
 
     supabase.table("conversations").insert({
         "user_id": user_id,

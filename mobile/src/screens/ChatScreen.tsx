@@ -6,7 +6,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { C, FLAT } from "../constants/colors";
 import { FONT, SIZE, SP, RADIUS } from "../constants/typography";
-import { api } from "../services/api";
+import { api, ApiError } from "../services/api";
 import { ChevronLeft } from "lucide-react-native";
 
 type Message = {
@@ -83,7 +83,9 @@ export default function ChatScreen({ character, onBack }: Props) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [slowResponse, setSlowResponse] = useState(false);   // shown after 10s
   const flatListRef = useRef<FlatList>(null);
+  const slowTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     setMessages([{
@@ -94,15 +96,50 @@ export default function ChatScreen({ character, onBack }: Props) {
     }]);
   }, [character.id]);
 
+  // エラー種別 → ユーザー向けメッセージ
+  const errorMessage = (err: unknown): string => {
+    if (err instanceof ApiError) {
+      console.error(`[ChatScreen] ApiError kind=${err.kind} status=${err.status} msg=${err.message}`);
+      switch (err.kind) {
+        case "rate_limit": return "今ちょっと混んでるみたい、少ししてからもう一回送ってみて 🙏";
+        case "timeout":    return "返事に時間がかかりすぎちゃった、もう一回送ってみて ⏳";
+        case "network":    return "ネットがつながってないかも、確認してみて 📡";
+        case "auth":       return "ログインが切れたかも、一度アプリを再起動してみて";
+        default:           return "ちょっとサーバー側で問題があったみたい、もう一回試してみて";
+      }
+    }
+    console.error("[ChatScreen] unknown error:", err);
+    return "うまく送れなかった、もう一回試してみて";
+  };
+
   const sendMessage = useCallback(async (text?: string) => {
     const msg = (text ?? inputText).trim();
     if (!msg || isLoading) return;
-    const userMsg: Message = { id: Date.now().toString(), role: "user", content: msg, ts: Date.now() };
+
+    const userMsg: Message = {
+      id: Date.now().toString(),
+      role: "user",
+      content: msg,
+      ts: Date.now(),
+    };
     setMessages(prev => [...prev, userMsg]);
     setInputText("");
     setIsLoading(true);
+    setSlowResponse(false);
+
+    // 10秒後に「もう少し待ってね」を表示
+    slowTimer.current = setTimeout(() => {
+      console.log("[ChatScreen] slow response threshold reached (10s)");
+      setSlowResponse(true);
+    }, 10_000);
+
+    console.log(`[ChatScreen] sending message (${msg.length} chars) to char=${character.id}`);
+    const t0 = Date.now();
+
     try {
       const resp = await api.chat.sendMessage(msg, character.id);
+      console.log(`[ChatScreen] reply received in ${Date.now() - t0}ms, crisis_level=${resp.crisis_level}`);
+
       setMessages(prev => [...prev, {
         id: (Date.now() + 1).toString(),
         role: "assistant",
@@ -110,15 +147,20 @@ export default function ChatScreen({ character, onBack }: Props) {
         crisisResources: resp.crisis_resources,
         ts: Date.now(),
       }]);
-    } catch {
+    } catch (err) {
+      const errMsg = errorMessage(err);
+      console.warn(`[ChatScreen] error after ${Date.now() - t0}ms → "${errMsg}"`);
+
       setMessages(prev => [...prev, {
         id: (Date.now() + 1).toString(),
         role: "assistant",
-        content: "ちょっと返せなかった…もう一回言って？",
+        content: errMsg,
         ts: Date.now(),
       }]);
     } finally {
+      if (slowTimer.current) clearTimeout(slowTimer.current);
       setIsLoading(false);
+      setSlowResponse(false);
       setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
     }
   }, [inputText, isLoading, character.id]);
@@ -221,15 +263,22 @@ export default function ChatScreen({ character, onBack }: Props) {
           onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: false })}
           showsVerticalScrollIndicator={false}
           ListFooterComponent={isLoading ? (
-            <View style={s.rowLeft}>
-              {character.avatar_url ? (
-                <Image source={{ uri: character.avatar_url }} style={s.avatarImg} />
-              ) : (
-                <View style={[s.avatar, { marginRight: 8 }]}>
-                  <Text style={s.avatarInitial}>{character.name[0]}</Text>
-                </View>
+            <View>
+              <View style={s.rowLeft}>
+                {character.avatar_url ? (
+                  <Image source={{ uri: character.avatar_url }} style={s.avatarImg} />
+                ) : (
+                  <View style={[s.avatar, { marginRight: 8 }]}>
+                    <Text style={s.avatarInitial}>{character.name[0]}</Text>
+                  </View>
+                )}
+                <TypingDots />
+              </View>
+              {slowResponse && (
+                <Text style={s.slowMsg}>
+                  少し時間がかかってるよ、もう少し待ってね ☕
+                </Text>
               )}
-              <TypingDots />
             </View>
           ) : null}
         />
@@ -379,6 +428,15 @@ const s = StyleSheet.create({
     fontSize: SIZE.label,
     color: C.ink3,
     marginVertical: 12,
+  },
+  slowMsg: {
+    textAlign: "center",
+    fontFamily: FONT.regular,
+    fontSize: SIZE.small,
+    color: C.ink2,
+    marginTop: SP.sm,
+    marginBottom: SP.xs,
+    paddingHorizontal: SP.xl,
   },
   row: {
     flexDirection: "row",

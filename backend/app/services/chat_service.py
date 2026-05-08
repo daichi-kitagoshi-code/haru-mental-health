@@ -1,10 +1,25 @@
 import anthropic
+import asyncio
+import logging
+import time
+
 from app.core.config import settings
 from app.services.crisis_detector import detect_crisis_level, CRISIS_RESOURCES
 from app.services.memory_service import format_memories_for_prompt
 
+logger = logging.getLogger(__name__)
+
 async_client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
 
+# ── Retry / timeout config ─────────────────────────────────────────────────
+API_TIMEOUT_SEC  = 30        # per-attempt timeout
+MAX_RETRIES      = 3
+BACKOFF_BASE_SEC = 2         # exponential backoff base (2^0=1s, 2^1=2s)
+RATE_LIMIT_WAIT  = 8         # extra wait for 429 (seconds)
+MAX_HISTORY_MSGS = 20        # hard cap on history messages
+TOKEN_BUDGET     = 8000      # rough total token budget before compression
+
+# ── Crisis instructions ────────────────────────────────────────────────────
 CRISIS_LEVEL_2_INSTRUCTION = """
 【重要：危機対応レベル2】
 - まず深く共感する（「そんなに辛かったんだね」「よく話してくれたね」）
@@ -32,25 +47,70 @@ SPEECH_STYLE_INSTRUCTIONS = {
 }
 
 
-def build_system_prompt(character: dict, user_name: str, user_memories: list[dict], crisis_level: int) -> str:
+# ── Token estimation ───────────────────────────────────────────────────────
+def estimate_tokens(text: str) -> int:
+    """
+    Rough estimate: Japanese ~1 token / 2 chars, English ~1 token / 4 chars.
+    Use 2.5 chars/token as a conservative middle ground.
+    """
+    return max(1, len(text) // 2)
+
+
+def trim_history_to_budget(
+    messages: list[dict],
+    system_prompt: str,
+    user_message: str,
+) -> list[dict]:
+    """
+    Trim oldest messages until estimated token count fits within TOKEN_BUDGET.
+    Always keeps at least the most recent 4 messages for context continuity.
+    """
+    # Reserve tokens: system prompt + latest user message + response headroom
+    reserved = estimate_tokens(system_prompt) + estimate_tokens(user_message) + 600
+    available = TOKEN_BUDGET - reserved
+
+    if available <= 0:
+        logger.warning("[chat] system prompt alone exceeds token budget")
+        return messages[-4:] if len(messages) > 4 else messages
+
+    total = 0
+    kept: list[dict] = []
+    for msg in reversed(messages):
+        t = estimate_tokens(msg["content"])
+        if total + t > available and len(kept) >= 4:
+            logger.info(f"[chat] token trim: dropped {len(messages) - len(kept)} old messages")
+            break
+        kept.insert(0, msg)
+        total += t
+
+    return kept
+
+
+# ── System prompt builder ──────────────────────────────────────────────────
+def build_system_prompt(
+    character: dict,
+    user_name: str,
+    user_memories: list[dict],
+    crisis_level: int,
+) -> str:
     memory_text = format_memories_for_prompt(user_memories)
     speech_instruction = SPEECH_STYLE_INSTRUCTIONS.get(
         character.get("speech_style", ""),
-        "タメ口で自然に話してください。"
+        "タメ口で自然に話してください。",
     )
-
     crisis_instruction = ""
     if crisis_level == 3:
         crisis_instruction = CRISIS_LEVEL_3_INSTRUCTION
     elif crisis_level == 2:
         crisis_instruction = CRISIS_LEVEL_2_INSTRUCTION
 
-    gender_ja = {"male": "男性", "female": "女性", "other": "どちらでもない"}.get(character.get("gender", ""), "")
-
-    education = character.get("education") or "学歴不明"
-    background = character.get("background") or ""
-    hobbies = character.get("hobbies") or ""
-    occupation = character.get("occupation") or ""
+    gender_ja = {"male": "男性", "female": "女性", "other": "どちらでもない"}.get(
+        character.get("gender", ""), ""
+    )
+    education   = character.get("education")  or "学歴不明"
+    background  = character.get("background") or ""
+    hobbies     = character.get("hobbies")    or ""
+    occupation  = character.get("occupation") or ""
 
     return f"""あなたは{character['name']}、{user_name}の親友です。
 
@@ -91,6 +151,7 @@ def build_system_prompt(character: dict, user_name: str, user_memories: list[dic
 {crisis_instruction}"""
 
 
+# ── Core reply generation with retry ──────────────────────────────────────
 async def generate_reply(
     user_message: str,
     conversation_history: list[dict],
@@ -98,8 +159,14 @@ async def generate_reply(
     user_name: str,
     user_memories: list[dict],
 ) -> dict:
+    # ① Crisis detection always runs first (never blocks reply generation)
     crisis_level = detect_crisis_level(user_message)
+    logger.info(
+        "[chat] request: char=%s crisis_level=%d msg_preview=%s",
+        character.get("name"), crisis_level, user_message[:40],
+    )
 
+    # ② Build prompt
     system_prompt = build_system_prompt(
         character=character,
         user_name=user_name,
@@ -107,20 +174,116 @@ async def generate_reply(
         crisis_level=crisis_level,
     )
 
-    messages = []
-    for msg in conversation_history[-20:]:
-        messages.append({"role": msg["role"], "content": msg["content"]})
-    messages.append({"role": "user", "content": user_message})
+    # ③ Prepare history with token budget management
+    raw_history = [
+        {"role": m["role"], "content": m["content"]}
+        for m in conversation_history[-MAX_HISTORY_MSGS:]
+    ]
+    trimmed = trim_history_to_budget(raw_history, system_prompt, user_message)
+    messages = trimmed + [{"role": "user", "content": user_message}]
 
-    response = await async_client.messages.create(
-        model="claude-sonnet-4-6",
-        max_tokens=512,
-        system=system_prompt,
-        messages=messages,
+    est_tokens = estimate_tokens(system_prompt) + sum(
+        estimate_tokens(m["content"]) for m in messages
+    )
+    logger.info(
+        "[chat] sending %d messages (~%d tokens estimated)",
+        len(messages), est_tokens,
     )
 
-    return {
-        "reply": response.content[0].text,
-        "crisis_level": crisis_level,
-        "crisis_resources": CRISIS_RESOURCES if crisis_level >= 3 else None,
-    }
+    # ④ Retry loop
+    last_error: str = "unknown"
+    for attempt in range(1, MAX_RETRIES + 1):
+        try:
+            t0 = time.monotonic()
+            logger.info("[chat] attempt %d/%d", attempt, MAX_RETRIES)
+
+            response = await asyncio.wait_for(
+                async_client.messages.create(
+                    model="claude-sonnet-4-6",
+                    max_tokens=512,
+                    system=system_prompt,
+                    messages=messages,
+                ),
+                timeout=API_TIMEOUT_SEC,
+            )
+
+            elapsed = time.monotonic() - t0
+            reply_text = response.content[0].text
+            logger.info(
+                "[chat] success on attempt %d (%.2fs) stop_reason=%s reply_len=%d",
+                attempt, elapsed, response.stop_reason, len(reply_text),
+            )
+
+            return {
+                "reply": reply_text,
+                "crisis_level": crisis_level,
+                "crisis_resources": CRISIS_RESOURCES if crisis_level >= 3 else None,
+            }
+
+        # ── Timeout ──────────────────────────────────────────────────────
+        except asyncio.TimeoutError:
+            last_error = "timeout"
+            logger.warning(
+                "[chat] attempt %d/%d timed out after %ds",
+                attempt, MAX_RETRIES, API_TIMEOUT_SEC,
+            )
+            if attempt < MAX_RETRIES:
+                wait = BACKOFF_BASE_SEC ** (attempt - 1)   # 1s → 2s
+                logger.info("[chat] retrying in %.1fs", wait)
+                await asyncio.sleep(wait)
+
+        # ── Rate limit (429) ──────────────────────────────────────────────
+        except anthropic.RateLimitError as e:
+            last_error = "rate_limit_429"
+            logger.warning(
+                "[chat] attempt %d/%d rate-limited: %s",
+                attempt, MAX_RETRIES, str(e),
+            )
+            if attempt < MAX_RETRIES:
+                wait = RATE_LIMIT_WAIT * attempt   # 8s → 16s
+                logger.info("[chat] retrying in %.1fs (rate limit backoff)", wait)
+                await asyncio.sleep(wait)
+
+        # ── API server errors (5xx) ───────────────────────────────────────
+        except anthropic.APIStatusError as e:
+            last_error = f"api_status_{e.status_code}"
+            logger.error(
+                "[chat] attempt %d/%d API status error: status=%d body=%s",
+                attempt, MAX_RETRIES, e.status_code, str(e.message)[:200],
+            )
+            if e.status_code >= 500 and attempt < MAX_RETRIES:
+                wait = BACKOFF_BASE_SEC ** (attempt - 1)
+                logger.info("[chat] retrying in %.1fs", wait)
+                await asyncio.sleep(wait)
+            else:
+                # 4xx (not rate limit) → don't retry
+                logger.error("[chat] non-retryable error %d, aborting", e.status_code)
+                break
+
+        # ── Connection / network errors ───────────────────────────────────
+        except anthropic.APIConnectionError as e:
+            last_error = "connection_error"
+            logger.error(
+                "[chat] attempt %d/%d connection error: %s",
+                attempt, MAX_RETRIES, str(e),
+            )
+            if attempt < MAX_RETRIES:
+                wait = BACKOFF_BASE_SEC ** attempt
+                logger.info("[chat] retrying in %.1fs", wait)
+                await asyncio.sleep(wait)
+
+        # ── Unexpected ────────────────────────────────────────────────────
+        except Exception as e:
+            last_error = f"unexpected_{type(e).__name__}"
+            logger.exception(
+                "[chat] attempt %d/%d unexpected error: %s",
+                attempt, MAX_RETRIES, str(e),
+            )
+            break   # unexpected errors are not retried
+
+    # All attempts exhausted
+    logger.error(
+        "[chat] all %d attempts failed. last_error=%s char=%s",
+        MAX_RETRIES, last_error, character.get("name"),
+    )
+    raise RuntimeError(f"CHAT_API_FAILED:{last_error}")
