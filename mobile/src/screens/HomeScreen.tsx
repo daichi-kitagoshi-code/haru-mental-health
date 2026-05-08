@@ -45,7 +45,7 @@ function timeAgo(dateStr: string): string {
   return `${Math.floor(h / 24)}日前`;
 }
 
-const CHAR_COLORS = ["#FF385C", "#5856D6", "#34C759", "#FF9500", "#30B0C7", "#FF2D55"];
+const CHAR_COLORS = ["#FF5A5F", "#4A90D9", "#52B788", "#F4A832", "#FF8FA3", "#FF385C"];
 function charColor(id: string) {
   const hash = id.split("").reduce((a, c) => a + c.charCodeAt(0), 0);
   return CHAR_COLORS[hash % CHAR_COLORS.length];
