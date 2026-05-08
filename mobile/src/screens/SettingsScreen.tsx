@@ -1,23 +1,20 @@
 import React, { useState, useEffect, useCallback } from "react";
 import {
   View, Text, TouchableOpacity, StyleSheet, ScrollView,
-  Alert, Switch, TextInput, ActivityIndicator, Platform,
+  Alert, TextInput, ActivityIndicator, Platform,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { C, FLAT } from "../constants/colors";
 import { FONT, SIZE, SP, RADIUS } from "../constants/typography";
 import { api } from "../services/api";
-import { ChevronRight, Bell, BellOff, Cake, LogOut, Crown } from "lucide-react-native";
+import { Cake, LogOut, Crown } from "lucide-react-native";
 
 interface Props {
   onLogout: () => void;
 }
 
 interface NotifSettings {
-  notify_morning:  boolean;
-  notify_evening:  boolean;
-  notify_inactive: boolean;
-  birthday:        string;   // "MM-DD" or ""
+  birthday: string;   // "MM-DD" or ""
 }
 
 const CARD_OFFSET = 4;
@@ -45,52 +42,12 @@ const fc = StyleSheet.create({
   },
 });
 
-// ── Row components ───────────────────────────────────────────────────────────
-function ToggleRow({
-  label, sub, value, onChange, icon,
-}: {
-  label: string; sub?: string; value: boolean;
-  onChange: (v: boolean) => void; icon?: React.ReactNode;
-}) {
-  return (
-    <View style={r.row}>
-      {icon && <View style={r.iconWrap}>{icon}</View>}
-      <View style={{ flex: 1 }}>
-        <Text style={r.label}>{label}</Text>
-        {sub && <Text style={r.sub}>{sub}</Text>}
-      </View>
-      <Switch
-        value={value}
-        onValueChange={onChange}
-        trackColor={{ false: C.line, true: C.coral }}
-        thumbColor={C.white}
-        ios_backgroundColor={C.line}
-      />
-    </View>
-  );
-}
-
-const r = StyleSheet.create({
-  row: {
-    flexDirection: "row", alignItems: "center",
-    paddingHorizontal: SP.md, paddingVertical: 14,
-    borderBottomWidth: 2, borderBottomColor: C.line,
-  },
-  iconWrap: { marginRight: 12 },
-  label: { fontFamily: FONT.syneSemi, fontSize: SIZE.body, color: C.ink },
-  sub: { fontFamily: FONT.regular, fontSize: SIZE.caption, color: C.ink2, marginTop: 2 },
-});
 
 // ── Main screen ──────────────────────────────────────────────────────────────
 export default function SettingsScreen({ onLogout }: Props) {
   const [loading,   setLoading]  = useState(true);
   const [saving,    setSaving]   = useState(false);
-  const [notif, setNotif] = useState<NotifSettings>({
-    notify_morning:  true,
-    notify_evening:  true,
-    notify_inactive: true,
-    birthday:        "",
-  });
+  const [notif, setNotif] = useState<NotifSettings>({ birthday: "" });
 
   // birthday input state: month / day separately for easy validation
   const [bMonth, setBMonth] = useState("");
@@ -100,12 +57,7 @@ export default function SettingsScreen({ onLogout }: Props) {
   useEffect(() => {
     api.notifications.getSettings()
       .then(data => {
-        setNotif({
-          notify_morning:  data.notify_morning  ?? true,
-          notify_evening:  data.notify_evening  ?? true,
-          notify_inactive: data.notify_inactive ?? true,
-          birthday:        data.birthday        ?? "",
-        });
+        setNotif({ birthday: data.birthday ?? "" });
         if (data.birthday) {
           const [m, d] = data.birthday.split("-");
           setBMonth(m || "");
@@ -115,22 +67,6 @@ export default function SettingsScreen({ onLogout }: Props) {
       .catch(e => console.warn("[SettingsScreen] load failed:", e))
       .finally(() => setLoading(false));
   }, []);
-
-  // ── Save helper ────────────────────────────────────────────────────────
-  const saveToggle = useCallback(
-    async (field: keyof NotifSettings, value: boolean) => {
-      setNotif(prev => ({ ...prev, [field]: value }));
-      try {
-        await api.notifications.updateSettings({ [field]: value });
-      } catch (e) {
-        console.error("[SettingsScreen] save toggle failed:", e);
-        // revert on failure
-        setNotif(prev => ({ ...prev, [field]: !value }));
-        Alert.alert("保存できませんでした", "もう一度試してください");
-      }
-    },
-    [],
-  );
 
   const saveBirthday = useCallback(async () => {
     const m = bMonth.trim().padStart(2, "0");
@@ -220,41 +156,6 @@ export default function SettingsScreen({ onLogout }: Props) {
           </View>
         </SectionCard>
 
-        {/* ── 通知 ─────────────────────────────────────────────────── */}
-        <Text style={s.sectionLabel}>通知</Text>
-        <SectionCard>
-          <ToggleRow
-            label="朝のあいさつ"
-            sub="毎朝 8:00 に「おはよう」と話しかけてくれる"
-            value={notif.notify_morning}
-            onChange={v => saveToggle("notify_morning", v)}
-            icon={<Bell size={18} color={C.coral} strokeWidth={2} />}
-          />
-          <ToggleRow
-            label="夜のチェックイン"
-            sub="毎晩 22:00 に「今日どうだった？」と届く"
-            value={notif.notify_evening}
-            onChange={v => saveToggle("notify_evening", v)}
-            icon={<Bell size={18} color={C.sky} strokeWidth={2} />}
-          />
-          <View style={[r.row, { borderBottomWidth: 0 }]}>
-            <View style={r.iconWrap}>
-              <BellOff size={18} color={C.ink2} strokeWidth={2} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={r.label}>ひさしぶり通知</Text>
-              <Text style={r.sub}>3日間来ていない時に「また話してほしい」と届く</Text>
-            </View>
-            <Switch
-              value={notif.notify_inactive}
-              onValueChange={v => saveToggle("notify_inactive", v)}
-              trackColor={{ false: C.line, true: C.coral }}
-              thumbColor={C.white}
-              ios_backgroundColor={C.line}
-            />
-          </View>
-        </SectionCard>
-
         {/* ── 誕生日 ────────────────────────────────────────────────── */}
         <Text style={s.sectionLabel}>誕生日</Text>
         <SectionCard>
@@ -263,7 +164,7 @@ export default function SettingsScreen({ onLogout }: Props) {
             <Text style={s.birthdayTitle}>誕生日を教えて</Text>
           </View>
           <Text style={s.birthdayDesc}>
-            当日に友達から「おめでとう」のメッセージが届きます 🎂
+            誕生日を登録すると、当日に友達から必ずお祝いメッセージが届きます 🎂
           </Text>
           <View style={s.birthdayInputRow}>
             {/* Month */}

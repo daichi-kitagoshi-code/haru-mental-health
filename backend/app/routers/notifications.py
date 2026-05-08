@@ -92,10 +92,10 @@ async def get_notification_settings(authorization: str = Header(...)):
 
     return {
         "push_token":      row.data.get("push_token"),
-        "notify_enabled":  row.data.get("notify_enabled", True),
-        "notify_morning":  row.data.get("notify_morning", True),
-        "notify_evening":  row.data.get("notify_evening", True),
-        "notify_inactive": row.data.get("notify_inactive", True),
+        "notify_enabled":  row.data.get("notify_enabled", False),
+        "notify_morning":  row.data.get("notify_morning", False),
+        "notify_evening":  row.data.get("notify_evening", False),
+        "notify_inactive": row.data.get("notify_inactive", False),
         "birthday":        row.data.get("birthday"),   # "MM-DD" or None
     }
 
@@ -237,10 +237,10 @@ async def cron_birthday(authorization: str = Header(...)):
     require_service_key(authorization)
 
     today = datetime.now(timezone.utc).strftime("%m-%d")   # "MM-DD"
-    # birthday カラムは "MM-DD" 形式で保存
+    # 誕生日通知はトグル関係なし・push_token があれば必ず送る
     result = supabase.table("users").select(
-        "id, name, push_token, notify_enabled, birthday"
-    ).eq("notify_enabled", True).eq("birthday", today).not_.is_(
+        "id, name, push_token, birthday"
+    ).eq("birthday", today).not_.is_(
         "push_token", "null"
     ).execute()
 
